@@ -1,5 +1,5 @@
 // 離線支援：存下 app 本身與播放過的語音
-const VERSION = 'v5';
+const VERSION = 'v6';
 const SHELL = 'shell-' + VERSION;
 const AUDIO = 'audio-v1';
 const REAL = 'real-audio-v1';  // 使用者在書卷頁下載的真人錄音

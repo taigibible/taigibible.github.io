@@ -112,6 +112,8 @@ function toast(msg, ms = 3500) {
 }
 
 /* ---------- 真人錄音的每節時間表 ---------- */
+// 空白節、或整節只是註記「(Ha̍p-pēng tī téng-chat)＝併在上一節」「(Ū ê pán-pún…)＝有的抄本有這節」→ 不朗讀
+const isNoteVerse = t => !t || !t.trim() || /^\s*[\(（]\s*(hap peng|u e pan pun)/.test(foldText(t));
 const timingMem = new Map();
 async function getTimings(b, c) {
   const key = `tm:${b}:${c}`;
@@ -127,6 +129,16 @@ async function getTimings(b, c) {
   }
   const m = new Map();
   for (const [v, st, en] of raw.verses || []) if (st != null && en != null && en > st) m.set(v, { start: st, end: en });
+  // 註記節沒有被唸出來：拿掉它，並把它的時間併回上一節，避免上一節被切掉
+  try {
+    const ch = await getChapter('cl', b, c);
+    for (const [v, t] of ch) {
+      if (!isNoteVerse(t) || !m.has(v)) continue;
+      const note = m.get(v); m.delete(v);
+      const prev = [...m.keys()].filter(k => k < v).pop();
+      if (prev != null) m.get(prev).end = Math.max(m.get(prev).end, note.end);
+    }
+  } catch (e) { }
   timingMem.set(key, m);
   return m;
 }
@@ -155,7 +167,8 @@ const player = {
       try {
         const ch = await getChapter('cl', b, c);
         if (tk !== this.token) return false;
-        if (ch.length) { this.queue = ch.map(([v]) => ({ b, c, v })); this.idx = 0; return true; }
+        const vs = ch.filter(([v, t]) => !isNoteVerse(t));
+        if (vs.length) { this.queue = vs.map(([v]) => ({ b, c, v })); this.idx = 0; return true; }
       } catch (e) { if (tk === this.token) { toast(e.message); this.stop(); } return false; }
     }
     this.stop(); return false;
@@ -173,6 +186,7 @@ const player = {
       text = row ? row[1] : '';
     } catch (e) { if (tk === this.token) { toast(e.message); this.stop(); } return; }
     if (tk !== this.token) return;
+    if (isNoteVerse(text)) { if (this.queue.length === 1) { toast('這一節是註記（或併在上一節），沒有單獨的朗讀。'); this.stop(); } else this.next(); return; }
     if (settings.voice !== 'ai' && !this.realFailed.has(`${it.b}:${it.c}`)) {
       const tm = await getTimings(it.b, it.c);
       if (tk !== this.token) return;
@@ -318,7 +332,7 @@ async function buildRange(r) {
     else if (c === r.c2 && !r.isRange && r.v1) to = r.v1; // 單節
     if (from > maxV) throw new Error(`${BOOKS[r.b][0]} ${c} 章只有 ${maxV} 節。`);
     if (to > maxV) throw new Error(`${BOOKS[r.b][0]} ${c} 章只有 ${maxV} 節。`);
-    for (const [v] of ch) if (v >= from && v <= to) items.push({ b: r.b, c, v });
+    for (const [v, t] of ch) if (v >= from && v <= to && !isNoteVerse(t)) items.push({ b: r.b, c, v });
   }
   return items;
 }
