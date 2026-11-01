@@ -1,5 +1,5 @@
 // 離線支援：存下 app 本身與播放過的語音
-const VERSION = 'v2';
+const VERSION = 'v3';
 const SHELL = 'shell-' + VERSION;
 const AUDIO = 'audio-v1';
 const FILES = ['./', 'index.html', 'style.css', 'app.js', 'books.js', 'poj.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png', 'poj-font.woff2'];

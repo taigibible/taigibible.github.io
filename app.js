@@ -110,14 +110,30 @@ function toast(msg, ms = 3500) {
 const audioCache = new Map(); // 本次開啟期間已載入的語音
 const player = {
   queue: [], idx: 0, audio: null, paused: false, active: false, token: 0,
-  async start(items, label) {
+  chapters: [], chIdx: 0, chTotal: 0,
+  async start(items, label, chapters) {
     this.stop(true);
-    if (!items.length) return;
+    this.chapters = chapters || []; this.chIdx = 0; this.chTotal = this.chapters.length;
+    if (!items.length && !this.chapters.length) return;
     this.queue = items; this.idx = 0; this.active = true; this.paused = false; this.label = label;
     $('#player').hidden = false;
-    // 從首頁開始範圍朗讀時，先切到第一章
+    // 從首頁開始朗讀時，先切到第一章
     if (currentView.name !== 'chapter') { currentView = { name: 'chapter', b: -1, c: -1 }; }
+    if (!items.length) { if (!(await this.loadNextChapter())) return; }
     this.playCurrent();
+  },
+  // 長時間播放（整卷、整本）：一章一章載入
+  async loadNextChapter() {
+    const tk = this.token;
+    while (this.chIdx < this.chapters.length) {
+      const [b, c] = this.chapters[this.chIdx++];
+      try {
+        const ch = await getChapter('cl', b, c);
+        if (tk !== this.token) return false;
+        if (ch.length) { this.queue = ch.map(([v]) => ({ b, c, v })); this.idx = 0; return true; }
+      } catch (e) { if (tk === this.token) { toast(e.message); this.stop(); } return false; }
+    }
+    this.stop(); return false;
   },
   async playCurrent() {
     const tk = ++this.token;
@@ -148,9 +164,15 @@ const player = {
     if (!this.paused) a.play().catch(err => { if (tk === this.token && err.name !== 'AbortError') { updatePlayerUI('請按「繼續」開始播放'); this.paused = true; $('#playerPause').textContent = '繼續'; } });
     // 預先載入下一節
     const nx = this.queue[this.idx + 1];
+    if (!nx && this.chIdx < this.chapters.length) { const [nb, nc] = this.chapters[this.chIdx]; getChapter('cl', nb, nc).catch(() => { }); }
     if (nx) getChapter('cl', nx.b, nx.c).then(ch => { const r = ch.find(x => x[0] === nx.v); if (r && r[1]) getAudio(r[1]); }).catch(() => { });
   },
-  next() { this.idx++; if (this.idx >= this.queue.length) this.stop(); else this.playCurrent(); },
+  async next() {
+    this.idx++;
+    if (this.idx < this.queue.length) return this.playCurrent();
+    if (this.chIdx < this.chapters.length) { if (await this.loadNextChapter()) this.playCurrent(); return; }
+    this.stop();
+  },
   togglePause() {
     if (!this.active) return;
     this.paused = !this.paused;
@@ -161,7 +183,7 @@ const player = {
   stop(silent) {
     this.token++;
     if (this.audio) { try { this.audio.pause(); } catch (e) { } this.audio.onended = this.audio.onerror = this.audio.onplaying = null; }
-    this.audio = null; this.active = false; this.queue = []; this.paused = false;
+    this.audio = null; this.active = false; this.queue = []; this.paused = false; this.chapters = []; this.chIdx = this.chTotal = 0;
     $('#playerPause').textContent = '暫停';
     if (!silent) $('#player').hidden = true;
     markPlaying(null);
@@ -182,8 +204,9 @@ function updatePlayerUI(status) {
   const it = player.current();
   if (!it) return;
   const total = player.queue.length;
-  $('#playerLabel').textContent = `${refLabel(it.b, it.c, it.v)}` + (total > 1 ? `（${player.idx + 1}/${total}）` : '');
-  $('#playerStatus').textContent = status || '';
+  const long = player.chTotal > 1;
+  $('#playerLabel').textContent = refLabel(it.b, it.c, it.v) + (!long && total > 1 ? `（${player.idx + 1}/${total}）` : '');
+  $('#playerStatus').textContent = (long ? `${player.label}・第 ${player.chIdx}/${player.chTotal} 章　` : '') + (status || '');
 }
 function markPlaying(it) {
   document.querySelectorAll('.verse.playing').forEach(el => el.classList.remove('playing'));
@@ -232,6 +255,13 @@ async function playRange(text, errEl) {
   } catch (e) { errEl ? (errEl.textContent = e.message) : toast(e.message); }
 }
 
+function chapterList(fromBook, toBook) {
+  const list = [];
+  for (let b = fromBook; b < toBook; b++) for (let c = 1; c <= BOOKS[b][2]; c++) list.push([b, c]);
+  return list;
+}
+function playBooks(fromBook, toBook, label) { player.start([], label, chapterList(fromBook, toBook)); }
+
 /* ---------- 書籤、上次位置 ---------- */
 const getBookmarks = () => store.get('bookmarks', []);
 const isBookmarked = (b, c, v) => getBookmarks().some(x => x.b === b && x.c === c && x.v === v);
@@ -268,6 +298,15 @@ function renderHome() {
       </form>
       <div id="rangeErr" class="err"></div>
     </div>
+    <div class="box">
+      <div class="muted" style="font-size:14px;margin-bottom:6px">連續播放</div>
+      <div class="row">
+        <button class="btn ghost" type="button" data-play="all">▶ 整本聖經</button>
+        <button class="btn ghost" type="button" data-play="ot">▶ 舊約</button>
+        <button class="btn ghost" type="button" data-play="nt">▶ 新約</button>
+      </div>
+      <div class="muted" style="font-size:13px;margin-top:6px">要播某一卷：點書卷後按「▶ 播放整卷」。</div>
+    </div>
     ${last ? `<p><a href="#/c/${last.b}/${last.c}">繼續閱讀：${esc(refLabel(last.b, last.c))}｜${esc(BOOKS[last.b][1])}</a></p>` : ''}
     <h2>舊約（39 卷）</h2><div class="grid">${grid(0, OT_COUNT)}</div>
     <h2>新約（27 卷）</h2><div class="grid">${grid(OT_COUNT, 66)}</div>
@@ -279,6 +318,12 @@ function renderHome() {
     location.hash = `#/c/${r.b}/${r.c1}${r.v1 ? '/' + r.v1 : ''}`;
   };
   $('#rangeForm').onsubmit = e => { e.preventDefault(); playRange($('#rangeInput').value, $('#rangeErr')); };
+  view().querySelectorAll('[data-play]').forEach(btn => btn.onclick = () => {
+    const k = btn.dataset.play;
+    if (k === 'all') playBooks(0, 66, '整本聖經');
+    else if (k === 'ot') playBooks(0, OT_COUNT, '舊約');
+    else playBooks(OT_COUNT, 66, '新約');
+  });
 }
 
 function renderBook(b) {
@@ -286,7 +331,10 @@ function renderBook(b) {
   const [ab, full, n] = BOOKS[b];
   let links = '';
   for (let c = 1; c <= n; c++) links += `<a href="#/c/${b}/${c}">${c}</a>`;
-  view().innerHTML = `<h1>${esc(ab)}｜${esc(full)}</h1><div class="grid chapters">${links}</div>`;
+  view().innerHTML = `<h1>${esc(ab)}｜${esc(full)}</h1>
+    <div class="chap-tools"><button class="btn" id="playBook" type="button">▶ 播放整卷（${n} 章）</button></div>
+    <div class="grid chapters">${links}</div>`;
+  $('#playBook').onclick = () => playBooks(b, b + 1, full);
 }
 
 async function renderChapter(b, c, v) {
