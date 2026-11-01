@@ -128,3 +128,5 @@ input[type=text], input[type=search], select {
   font-size: 15px; text-align: center;
 }
 footer.about { font-size: 13px; color: var(--muted); margin-top: 28px; text-align: center; }
+
+.back { margin: 0 0 10px; padding: 6px 12px; }

@@ -435,7 +435,10 @@ async function setupBookDownload(b) {
     <div class="progress"><div id="bkBar"></div></div>`;
   view().appendChild(box);
   const show = k => { const el = $('#bkN'); if (el) el.textContent = k; const bar = $('#bkBar'); if (bar) bar.style.width = Math.round(k / n * 100) + '%'; };
-  show(await bookCachedCount(b));
+  const me = currentView;
+  const k0 = await bookCachedCount(b);
+  if (currentView !== me) return;
+  show(k0);
   $('#bkDl').onclick = async () => {
     const btn = $('#bkDl'); btn.disabled = true; btn.textContent = '下載中…';
     const cache = await caches.open(REAL_CACHE);
@@ -513,7 +516,8 @@ async function renderChapter(b, c, v) {
   const cur = player.current();
   if (cur && cur.b === b && cur.c === c) markPlaying(cur);
   else if (v) { const el = document.getElementById('v' + v); if (el) el.scrollIntoView({ block: 'center' }); }
-  else window.scrollTo(0, 0);
+  else if (!restoreScroll()) window.scrollTo(0, 0);
+  backPending = false;
 }
 function topVisibleVerse() {
   const els = document.querySelectorAll('.verse');
@@ -532,9 +536,10 @@ async function countDownloaded() {
   return n;
 }
 async function renderSearch(q) {
-  currentView = { name: 'search' };
+  const me = currentView = { name: 'search' };
   const scope = store.get('searchScope', 'all');
   view().innerHTML = `
+    <button class="btn ghost back" id="backBtn" type="button">‹ 返回</button>
     <h1>搜尋經文</h1>
     <div class="box">
       <form id="sForm" class="row" autocomplete="off">
@@ -553,6 +558,7 @@ async function renderSearch(q) {
     <ul class="results" id="sRes"></ul>`;
   $('#sForm').onsubmit = e => { e.preventDefault(); store.set('searchScope', $('#sScope').value); location.hash = '#/search/' + encodeURIComponent($('#sInput').value.trim()); };
   const n = await countDownloaded();
+  if (currentView !== me) return;
   if (n.hl < TOTAL_CHAPTERS || n.cl < TOTAL_CHAPTERS) {
     $('#sNote').innerHTML = `搜尋只會找已下載的章節（漢羅 ${n.hl}／全羅 ${n.cl}，全本 ${TOTAL_CHAPTERS} 章）。<a href="#/settings">到設定下載全本</a>，就能搜尋整本聖經。`;
   }
@@ -604,7 +610,8 @@ function highlight(t, fq) {
 async function renderBookmarks() {
   currentView = { name: 'bookmarks' };
   const bm = getBookmarks();
-  view().innerHTML = `<h1>書籤</h1>${bm.length ? '' : '<p class="muted">還沒有書籤。在經節右邊按 ☆ 就能加入。</p>'}<ul class="results" id="bmList"></ul>`;
+  view().innerHTML = `<button class="btn ghost back" id="backBtn" type="button">‹ 返回</button>
+    <h1>書籤</h1>${bm.length ? '' : '<p class="muted">還沒有書籤。在經節右邊按 ☆ 就能加入。</p>'}<ul class="results" id="bmList"></ul>`;
   const list = $('#bmList');
   for (const x of bm) {
     let t = '';
@@ -619,9 +626,11 @@ async function renderBookmarks() {
 /* 設定 */
 let dlRunning = false;
 async function renderSettings() {
-  currentView = { name: 'settings' };
+  const me = currentView = { name: 'settings' };
   const n = await countDownloaded();
+  if (currentView !== me) return;
   view().innerHTML = `
+    <button class="btn ghost back" id="backBtn" type="button">‹ 返回</button>
     <h1>設定</h1>
     <div class="box">
       <div style="margin-bottom:8px">字體大小：<b id="fsVal">${settings.fs}</b> px</div>
@@ -696,9 +705,10 @@ async function downloadAll() {
 
 /* 抽查：隨機 30 節，聽聽看真人錄音有沒有對準 */
 async function renderCheck() {
-  currentView = { name: 'check' };
+  const me = currentView = { name: 'check' };
   let list = store.get('checkList', null);
-  view().innerHTML = `<h1>抽查朗讀是否對準</h1>
+  view().innerHTML = `<button class="btn ghost back" id="backBtn" type="button">‹ 返回</button>
+    <h1>抽查朗讀是否對準</h1>
     <p class="muted" style="font-size:14px">每一節按 ▶ 聽，聽完按「準」或「不準」。「不準」是指開頭少字、結尾被切掉、或唸到前後節。</p>
     <div id="ckSum" class="box"></div><ul class="results" id="ckList"><li class="muted">挑選經節中…</li></ul>
     <button class="btn ghost" id="ckNew" type="button" style="margin-top:12px">重新抽 30 節</button>`;
@@ -713,6 +723,7 @@ async function renderCheck() {
       if (seen.has(`${b}:${c}:${v}`)) continue;
       seen.add(`${b}:${c}:${v}`); list.push({ b, c, v, r: null });
     }
+    if (currentView !== me) return;
     if (!list.length) { $('#ckList').innerHTML = '<li class="err">讀不到真人錄音的時間表（錄音還沒放上網，或沒有網路）。</li>'; return; }
     store.set('checkList', list);
   }
@@ -751,9 +762,37 @@ function route() {
     if (p[0] === 'settings') return renderSettings();
     if (p[0] === 'check') return renderCheck();
     return renderHome();
-  } finally { if (p[0] !== 'c') window.scrollTo(0, 0); }
+  } finally {
+    if (p[0] !== 'c' && !restoreScroll()) window.scrollTo(0, 0);
+  }
 }
-window.addEventListener('hashchange', route);
+// 「返回」：回到進入設定／搜尋／書籤之前的畫面，並捲回原來的位置
+const scrollMem = {};
+let lastMainHash = '#/', backPending = false;
+const isAux = h => /^#\/(settings|search|bookmarks|check)/.test(h);
+function restoreScroll() {
+  if (!backPending) return false;
+  backPending = false;
+  const y = scrollMem[location.hash || '#/'];
+  if (y == null) return false;
+  requestAnimationFrame(() => window.scrollTo(0, y));
+  return true;
+}
+document.addEventListener('click', e => {
+  if (!e.target.closest('#backBtn')) return;
+  backPending = true;
+  location.hash = /^#\/check/.test(location.hash) ? '#/settings' : lastMainHash;
+});
+let curY = 0, curHash = location.hash || '#/', routing = false;
+window.addEventListener('scroll', () => { if (!routing && (location.hash || '#/') === curHash) curY = window.scrollY; }, { passive: true });
+window.addEventListener('hashchange', e => {
+  const old = new URL(e.oldURL).hash || '#/';
+  scrollMem[old] = curY;
+  curHash = location.hash || '#/'; curY = 0;
+  routing = true; setTimeout(() => { routing = false; curY = window.scrollY; }, 600);
+  if (!isAux(old)) lastMainHash = old;
+  route();
+});
 route();
 
 /* ---------- 離線支援 ---------- */
