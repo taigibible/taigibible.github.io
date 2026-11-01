@@ -1,0 +1,4 @@
+poj-font.woff2 is a Latin subset of Noto Sans Regular (Google Fonts),
+bundled so Pe̍h-ōe-jī marks (o͘, ̍ tone 8, ⁿ) display on every phone.
+Copyright 2022 The Noto Project Authors (github.com/notofonts/latin-greek-cyrillic).
+Licensed under the SIL Open Font License, Version 1.1 — https://openfontlicense.org

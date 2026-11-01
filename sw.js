@@ -1,8 +1,8 @@
 // 離線支援：存下 app 本身與播放過的語音
-const VERSION = 'v1';
+const VERSION = 'v2';
 const SHELL = 'shell-' + VERSION;
 const AUDIO = 'audio-v1';
-const FILES = ['./', 'index.html', 'style.css', 'app.js', 'books.js', 'poj.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png'];
+const FILES = ['./', 'index.html', 'style.css', 'app.js', 'books.js', 'poj.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png', 'poj-font.woff2'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(SHELL).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));

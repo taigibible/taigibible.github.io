@@ -1,3 +1,9 @@
+@font-face {
+  font-family: "POJ";
+  src: url("poj-font.woff2") format("woff2");
+  unicode-range: U+0020-007E, U+00A0-024F, U+0300-036F, U+1E00-1EFF, U+2010-2027, U+207F;
+  font-display: swap;
+}
 :root {
   --bg: #fbf8f3; --fg: #2a2420; --muted: #7b6f66; --card: #ffffff; --line: #e6ddd2;
   --accent: #7a3b1e; --accent-fg: #ffffff; --hl: #fff1c2; --chip: #f3ece3;
@@ -18,7 +24,7 @@
 html, body { margin: 0; overflow-x: hidden; }
 body {
   background: var(--bg); color: var(--fg);
-  font-family: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", "Segoe UI", system-ui, sans-serif;
+  font-family: "POJ", "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", "Segoe UI", system-ui, sans-serif;
   font-size: 16px; line-height: 1.6;
   padding-bottom: calc(80px + env(safe-area-inset-bottom));
 }
