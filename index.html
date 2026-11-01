@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>台語巴克禮聖經</title>
+<meta name="description" content="1933 巴克禮台語聖經（漢羅／全羅），每節可用台語語音朗讀">
+<meta name="theme-color" content="#7a3b1e">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="台語聖經">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="topbar">
+  <a href="#/" class="brand" aria-label="回首頁">台語巴克禮聖經</a>
+  <nav class="topnav">
+    <a href="#/search" aria-label="搜尋">搜尋</a>
+    <a href="#/bookmarks" aria-label="書籤">書籤</a>
+    <a href="#/settings" aria-label="設定">設定</a>
+  </nav>
+</header>
+<main id="view" tabindex="-1"></main>
+<div id="player" class="player" hidden>
+  <div class="player-info"><span id="playerLabel"></span><span id="playerStatus" class="muted"></span></div>
+  <div class="player-btns">
+    <button id="playerPause" type="button">暫停</button>
+    <button id="playerStop" type="button">停止</button>
+  </div>
+</div>
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+<script src="books.js"></script>
+<script src="poj.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

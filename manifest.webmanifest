@@ -1,0 +1,16 @@
+{
+  "name": "台語巴克禮聖經",
+  "short_name": "台語聖經",
+  "description": "1933 巴克禮台語聖經（漢羅／全羅），每節可用台語語音朗讀",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#fbf8f3",
+  "theme_color": "#7a3b1e",
+  "lang": "zh-Hant-TW",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
