@@ -4,6 +4,11 @@
 const FHL = 'https://bible.fhl.net/json/qb.php';
 const TTS = 'https://hapsing.ithuan.tw/bangtsam?taibun=';
 const VERS = { hl: 'bklhl', cl: 'bklcl' };
+// 真人朗讀錄音（何綉圓、吳嘉雄朗讀，信望愛資訊中心，FDL 授權）
+const REAL_BASE = { ot: 'https://scottman58.github.io/taigi-bible-audio-ot/', nt: 'https://scottman58.github.io/taigi-bible-audio-nt/' };
+const REAL_CACHE = 'real-audio-v1';
+const realPath = (b, c) => `${String(b + 1).padStart(2, '0')}/${String(c).padStart(3, '0')}`;
+const realUrl = (b, c, ext) => REAL_BASE[b < 39 ? 'ot' : 'nt'] + realPath(b, c) + ext;
 const $ = (sel, el = document) => el.querySelector(sel);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -12,7 +17,7 @@ const store = {
   get(k, d) { try { const v = localStorage.getItem('tb:' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem('tb:' + k, JSON.stringify(v)); } catch (e) { } }
 };
-const settings = Object.assign({ script: 'hl', fs: 19, theme: 'auto' }, store.get('settings', {}));
+const settings = Object.assign({ script: 'hl', fs: 19, theme: 'auto', voice: 'real' }, store.get('settings', {}));
 function saveSettings() { store.set('settings', settings); applySettings(); }
 function applySettings() {
   document.documentElement.style.setProperty('--fs', settings.fs + 'px');
@@ -106,10 +111,32 @@ function toast(msg, ms = 3500) {
   clearTimeout(toastT); toastT = setTimeout(() => { t.hidden = true; }, ms);
 }
 
+/* ---------- 真人錄音的每節時間表 ---------- */
+const timingMem = new Map();
+async function getTimings(b, c) {
+  const key = `tm:${b}:${c}`;
+  if (timingMem.has(key)) return timingMem.get(key);
+  let raw = await idbGet(key);
+  if (!raw) {
+    try {
+      const r = await fetch(realUrl(b, c, '.json'));
+      if (!r.ok) throw new Error(r.status);
+      raw = await r.json();
+      await idbPut(key, raw);
+    } catch (e) { timingMem.set(key, null); setTimeout(() => timingMem.delete(key), 60000); return null; }
+  }
+  const m = new Map();
+  for (const [v, st, en] of raw.verses || []) if (st != null && en != null && en > st) m.set(v, { start: st, end: en });
+  timingMem.set(key, m);
+  return m;
+}
+const realAudio = new Audio();
+realAudio.preload = 'auto';
+
 /* ---------- 語音播放器 ---------- */
 const audioCache = new Map(); // 本次開啟期間已載入的語音
 const player = {
-  queue: [], idx: 0, audio: null, paused: false, active: false, token: 0,
+  queue: [], idx: 0, audio: null, paused: false, active: false, token: 0, watch: 0, segEnd: 0, realFailed: new Set(),
   chapters: [], chIdx: 0, chTotal: 0,
   async start(items, label, chapters) {
     this.stop(true);
@@ -117,8 +144,6 @@ const player = {
     if (!items.length && !this.chapters.length) return;
     this.queue = items; this.idx = 0; this.active = true; this.paused = false; this.label = label;
     $('#player').hidden = false;
-    // 從首頁開始朗讀時，先切到第一章
-    if (currentView.name !== 'chapter') { currentView = { name: 'chapter', b: -1, c: -1 }; }
     if (!items.length) { if (!(await this.loadNextChapter())) return; }
     this.playCurrent();
   },
@@ -148,8 +173,14 @@ const player = {
       text = row ? row[1] : '';
     } catch (e) { if (tk === this.token) { toast(e.message); this.stop(); } return; }
     if (tk !== this.token) return;
+    if (settings.voice !== 'ai' && !this.realFailed.has(`${it.b}:${it.c}`)) {
+      const tm = await getTimings(it.b, it.c);
+      if (tk !== this.token) return;
+      const seg = tm && tm.get(it.v);
+      if (seg) { this.playReal(it, seg, tm, tk); return; }
+    }
     if (!text) { this.next(); return; }
-    if (!navigator.onLine && !audioCache.has(text)) { /* 可能有離線快取，仍嘗試 */ }
+    if (this.audio === realAudio) { try { realAudio.pause(); } catch (e) { } }
     const a = getAudio(text);
     this.audio = a;
     a.onended = () => { if (tk === this.token) this.next(); };
@@ -167,6 +198,53 @@ const player = {
     if (!nx && this.chIdx < this.chapters.length) { const [nb, nc] = this.chapters[this.chIdx]; getChapter('cl', nb, nc).catch(() => { }); }
     if (nx) getChapter('cl', nx.b, nx.c).then(ch => { const r = ch.find(x => x[0] === nx.v); if (r && r[1]) getAudio(r[1]); }).catch(() => { });
   },
+  playReal(it, seg, tm, tk) {
+    const a = realAudio, url = realUrl(it.b, it.c, '.m4a');
+    if (this.audio && this.audio !== a) { try { this.audio.pause(); } catch (e) { } }
+    this.audio = a;
+    const same = a.src === url;
+    const contiguous = same && !a.paused && Math.abs(a.currentTime - seg.start) < 0.8;
+    if (!same) a.src = url;
+    this.segEnd = seg.end;
+    a.onended = () => { if (tk === this.token) this.finishReal(tk); };
+    a.onerror = () => {
+      if (tk !== this.token) return;
+      this.realFailed.add(`${it.b}:${it.c}`);  // 錄音讀不到 → 這一章改用 AI 語音
+      this.playCurrent();
+    };
+    a.onplaying = () => { if (tk === this.token) updatePlayerUI('朗讀中（真人）'); };
+    if (!contiguous) {
+      const seek = () => { try { a.currentTime = seg.start; } catch (e) { } };
+      if (a.readyState >= 1) seek(); else a.addEventListener('loadedmetadata', seek, { once: true });
+    }
+    if (!this.paused) a.play().catch(err => { if (tk === this.token && err.name !== 'AbortError') { updatePlayerUI('請按「繼續」開始播放'); this.paused = true; $('#playerPause').textContent = '繼續'; } });
+    clearInterval(this.watch);
+    this.watch = setInterval(() => {
+      if (tk !== this.token) { clearInterval(this.watch); return; }
+      if (a.readyState < 1 || a.seeking || a.currentTime < this.segEnd - 0.03) return;
+      // 下一節在同一章、緊接著 → 不停頓，直接接著唸
+      const nx = this.queue[this.idx + 1];
+      const ns = nx && nx.b === it.b && nx.c === it.c ? tm.get(nx.v) : null;
+      if (ns && ns.start - this.segEnd < 1.0 && ns.start >= this.segEnd - 1.0) {
+        this.idx++; this.segEnd = ns.end; markPlaying(nx); updatePlayerUI(this.paused ? '已暫停' : '朗讀中（真人）');
+        it = nx;
+        return;
+      }
+      this.finishReal(tk);
+    }, 40);
+    // 預先載入下一章的時間表
+    if (this.idx + 1 >= this.queue.length && this.chIdx < this.chapters.length) {
+      const [nb, nc] = this.chapters[this.chIdx]; getChapter('cl', nb, nc).catch(() => { }); getTimings(nb, nc);
+    }
+  },
+  finishReal(tk) {
+    if (tk !== this.token) return;
+    clearInterval(this.watch);
+    const nx = this.queue[this.idx + 1];
+    const cur = this.queue[this.idx];
+    if (!(nx && cur && nx.b === cur.b && nx.c === cur.c)) { try { realAudio.pause(); } catch (e) { } }
+    this.next();
+  },
   async next() {
     this.idx++;
     if (this.idx < this.queue.length) return this.playCurrent();
@@ -182,6 +260,7 @@ const player = {
   },
   stop(silent) {
     this.token++;
+    clearInterval(this.watch);
     if (this.audio) { try { this.audio.pause(); } catch (e) { } this.audio.onended = this.audio.onerror = this.audio.onplaying = null; }
     this.audio = null; this.active = false; this.queue = []; this.paused = false; this.chapters = []; this.chIdx = this.chTotal = 0;
     $('#playerPause').textContent = '暫停';
@@ -251,6 +330,7 @@ async function playRange(text, errEl) {
     const items = await buildRange(r);
     if (errEl) errEl.textContent = '';
     store.set('lastRange', text);
+    if (items.length) location.hash = `#/c/${items[0].b}/${items[0].c}`;
     player.start(items, text);
   } catch (e) { errEl ? (errEl.textContent = e.message) : toast(e.message); }
 }
@@ -260,7 +340,7 @@ function chapterList(fromBook, toBook) {
   for (let b = fromBook; b < toBook; b++) for (let c = 1; c <= BOOKS[b][2]; c++) list.push([b, c]);
   return list;
 }
-function playBooks(fromBook, toBook, label) { player.start([], label, chapterList(fromBook, toBook)); }
+function playBooks(fromBook, toBook, label) { location.hash = `#/c/${fromBook}/1`; player.start([], label, chapterList(fromBook, toBook)); }
 
 /* ---------- 書籤、上次位置 ---------- */
 const getBookmarks = () => store.get('bookmarks', []);
@@ -310,7 +390,7 @@ function renderHome() {
     ${last ? `<p><a href="#/c/${last.b}/${last.c}">繼續閱讀：${esc(refLabel(last.b, last.c))}｜${esc(BOOKS[last.b][1])}</a></p>` : ''}
     <h2>舊約（39 卷）</h2><div class="grid">${grid(0, OT_COUNT)}</div>
     <h2>新約（27 卷）</h2><div class="grid">${grid(OT_COUNT, 66)}</div>
-    <footer class="about">經文：1933 年巴克禮台語譯本，資料來自<a href="https://bible.fhl.net/" target="_blank" rel="noopener">信望愛資訊中心</a><br>台語語音：<a href="https://ithuan.tw/" target="_blank" rel="noopener">意傳科技</a></footer>`;
+    <footer class="about">經文：1933 年巴克禮台語譯本，資料來自<a href="https://bible.fhl.net/" target="_blank" rel="noopener">信望愛資訊中心</a><br>真人朗讀：何綉圓、吳嘉雄（信望愛資訊中心，FDL 授權）<br>AI 台語語音：<a href="https://ithuan.tw/" target="_blank" rel="noopener">意傳科技</a></footer>`;
   $('#jumpForm').onsubmit = e => {
     e.preventDefault();
     const r = parseRef($('#jumpInput').value);
@@ -335,6 +415,48 @@ function renderBook(b) {
     <div class="chap-tools"><button class="btn" id="playBook" type="button">▶ 播放整卷（${n} 章）</button></div>
     <div class="grid chapters">${links}</div>`;
   $('#playBook').onclick = () => playBooks(b, b + 1, full);
+  setupBookDownload(b);
+}
+async function bookCachedCount(b) {
+  try {
+    const cache = await caches.open(REAL_CACHE);
+    let n = 0;
+    for (let c = 1; c <= BOOKS[b][2]; c++) if (await cache.match(realUrl(b, c, '.m4a'))) n++;
+    return n;
+  } catch (e) { return 0; }
+}
+async function setupBookDownload(b) {
+  if (!('caches' in window)) return;
+  const n = BOOKS[b][2];
+  const box = document.createElement('div');
+  box.className = 'box'; box.style.marginTop = '16px';
+  box.innerHTML = `<div>離線收聽：已下載 <b id="bkN">…</b> / ${n} 章真人錄音</div>
+    <div class="row" style="margin-top:8px"><button class="btn ghost" id="bkDl" type="button">下載這卷錄音</button><span id="bkMsg" class="muted" style="font-size:14px"></span></div>
+    <div class="progress"><div id="bkBar"></div></div>`;
+  view().appendChild(box);
+  const show = k => { const el = $('#bkN'); if (el) el.textContent = k; const bar = $('#bkBar'); if (bar) bar.style.width = Math.round(k / n * 100) + '%'; };
+  show(await bookCachedCount(b));
+  $('#bkDl').onclick = async () => {
+    const btn = $('#bkDl'); btn.disabled = true; btn.textContent = '下載中…';
+    const cache = await caches.open(REAL_CACHE);
+    let k = 0, fail = 0;
+    for (let c = 1; c <= n; c++) {
+      try {
+        const u = realUrl(b, c, '.m4a');
+        if (!(await cache.match(u))) {
+          const r = await fetch(u);
+          if (!r.ok) throw new Error(r.status);
+          await cache.put(u, r);
+        }
+        await getTimings(b, c);
+        k++;
+      } catch (e) { fail++; }
+      if (currentView.name === 'book' && currentView.b === b) show(k);
+    }
+    const msg = fail ? `有 ${fail} 章下載失敗，可再按一次補下載。` : '下載完成，沒網路也能聽這一卷。';
+    toast(msg, 4000);
+    if (currentView.name === 'book' && currentView.b === b) { const bt = $('#bkDl'); bt.disabled = false; bt.textContent = '下載這卷錄音'; $('#bkMsg').textContent = msg; }
+  };
 }
 
 async function renderChapter(b, c, v) {
@@ -507,6 +629,14 @@ async function renderSettings() {
       <p class="vtext" style="margin:10px 0 0">Siōng-tè thiàⁿ sè-kan / 上帝疼世間</p>
     </div>
     <div class="box">
+      <div style="margin-bottom:8px">朗讀聲音</div>
+      <div class="seg" id="voiceSeg">
+        <button type="button" data-voice="real" class="${settings.voice !== 'ai' ? 'on' : ''}">真人朗讀</button>
+        <button type="button" data-voice="ai" class="${settings.voice === 'ai' ? 'on' : ''}">AI 語音</button>
+      </div>
+      <div class="muted" style="font-size:13px;margin-top:6px">真人朗讀：何綉圓、吳嘉雄（信望愛資訊中心）。錄音缺少的經節會自動改用 AI 語音。<a href="#/check">抽查朗讀是否對準</a></div>
+    </div>
+    <div class="box">
       <div style="margin-bottom:8px">外觀</div>
       <div class="seg" id="themeSeg">
         <button type="button" data-t="auto" class="${settings.theme === 'auto' ? 'on' : ''}">跟手機</button>
@@ -521,7 +651,7 @@ async function renderSettings() {
       <div class="progress"><div id="dlBar" style="width:${Math.round((n.hl + n.cl) / (2 * TOTAL_CHAPTERS) * 100)}%"></div></div>
       <div id="dlMsg" class="muted" style="font-size:14px;margin-top:6px"></div>
     </div>
-    <footer class="about">經文：1933 年巴克禮台語譯本，資料來自<a href="https://bible.fhl.net/" target="_blank" rel="noopener">信望愛資訊中心</a>　台語語音：<a href="https://ithuan.tw/" target="_blank" rel="noopener">意傳科技</a></footer>`;
+    <footer class="about">經文：1933 年巴克禮台語譯本，資料來自<a href="https://bible.fhl.net/" target="_blank" rel="noopener">信望愛資訊中心</a><br>真人朗讀：何綉圓、吳嘉雄（信望愛資訊中心，FDL 授權）　AI 台語語音：<a href="https://ithuan.tw/" target="_blank" rel="noopener">意傳科技</a></footer>`;
   const setFs = d => { settings.fs = Math.min(32, Math.max(14, settings.fs + d)); saveSettings(); $('#fsVal').textContent = settings.fs; };
   $('#fsDown').onclick = () => setFs(-1);
   $('#fsUp').onclick = () => setFs(+1);
@@ -530,6 +660,10 @@ async function renderSettings() {
     $('#themeSeg').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === btn));
   });
   $('#dlAll').onclick = downloadAll;
+  $('#voiceSeg').querySelectorAll('button').forEach(btn => btn.onclick = () => {
+    settings.voice = btn.dataset.voice; saveSettings(); player.stop();
+    $('#voiceSeg').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === btn));
+  });
 }
 async function downloadAll() {
   if (dlRunning) return;
@@ -560,6 +694,48 @@ async function downloadAll() {
   toast(failed ? `下載完成，但有 ${failed} 章失敗，再按一次「下載全本」可補下載。` : '全本下載完成，現在可以離線閱讀與搜尋了。', 5000);
 }
 
+/* 抽查：隨機 30 節，聽聽看真人錄音有沒有對準 */
+async function renderCheck() {
+  currentView = { name: 'check' };
+  let list = store.get('checkList', null);
+  view().innerHTML = `<h1>抽查朗讀是否對準</h1>
+    <p class="muted" style="font-size:14px">每一節按 ▶ 聽，聽完按「準」或「不準」。「不準」是指開頭少字、結尾被切掉、或唸到前後節。</p>
+    <div id="ckSum" class="box"></div><ul class="results" id="ckList"><li class="muted">挑選經節中…</li></ul>
+    <button class="btn ghost" id="ckNew" type="button" style="margin-top:12px">重新抽 30 節</button>`;
+  $('#ckNew').onclick = () => { store.set('checkList', null); renderCheck(); };
+  if (!list) {
+    list = []; const seen = new Set(); let tries = 0;
+    while (list.length < 30 && tries++ < 120) {
+      const b = Math.floor(Math.random() * 66), c = 1 + Math.floor(Math.random() * BOOKS[b][2]);
+      const tm = await getTimings(b, c);
+      if (!tm || !tm.size) continue;
+      const vs = [...tm.keys()], v = vs[Math.floor(Math.random() * vs.length)];
+      if (seen.has(`${b}:${c}:${v}`)) continue;
+      seen.add(`${b}:${c}:${v}`); list.push({ b, c, v, r: null });
+    }
+    if (!list.length) { $('#ckList').innerHTML = '<li class="err">讀不到真人錄音的時間表（錄音還沒放上網，或沒有網路）。</li>'; return; }
+    store.set('checkList', list);
+  }
+  const draw = () => {
+    const ok = list.filter(x => x.r === 'ok').length, bad = list.filter(x => x.r === 'bad');
+    $('#ckSum').innerHTML = `已聽 ${ok + bad.length} / ${list.length} 節：準 <b>${ok}</b>、不準 <b>${bad.length}</b>` +
+      (bad.length ? `<div style="margin-top:6px;font-size:14px">不準的節（請告訴 Claude）：${bad.map(x => esc(refLabel(x.b, x.c, x.v))).join('、')}</div>` : '');
+    $('#ckList').innerHTML = list.map((x, i) => `<li><div class="row">
+      <button class="play" type="button" data-i="${i}" aria-label="播放">▶</button>
+      <a href="#/c/${x.b}/${x.c}/${x.v}" style="flex:1"><span class="ref">${esc(refLabel(x.b, x.c, x.v))}</span></a>
+      <button class="btn ${x.r === 'ok' ? '' : 'ghost'}" type="button" data-ok="${i}">準</button>
+      <button class="btn ${x.r === 'bad' ? '' : 'ghost'}" type="button" data-bad="${i}">不準</button></div></li>`).join('');
+  };
+  draw();
+  $('#ckList').onclick = e => {
+    const t = e.target.closest('button'); if (!t) return;
+    if (t.dataset.i != null) { const x = list[+t.dataset.i]; const cur = player.current(); if (cur && cur.b === x.b && cur.c === x.c && cur.v === x.v) { player.stop(); return; } player.start([{ b: x.b, c: x.c, v: x.v }], refLabel(x.b, x.c, x.v)); return; }
+    if (t.dataset.ok != null) list[+t.dataset.ok].r = 'ok';
+    if (t.dataset.bad != null) list[+t.dataset.bad].r = 'bad';
+    store.set('checkList', list); draw();
+  };
+}
+
 /* ---------- 路由 ---------- */
 function route() {
   const h = location.hash.replace(/^#\/?/, '');
@@ -573,6 +749,7 @@ function route() {
     if (p[0] === 'search') return renderSearch(p[1] ? decodeURIComponent(p.slice(1).join('/')) : '');
     if (p[0] === 'bookmarks') return renderBookmarks();
     if (p[0] === 'settings') return renderSettings();
+    if (p[0] === 'check') return renderCheck();
     return renderHome();
   } finally { if (p[0] !== 'c') window.scrollTo(0, 0); }
 }
