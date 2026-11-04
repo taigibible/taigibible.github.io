@@ -142,3 +142,5 @@ footer.about { font-size: 13px; color: var(--muted); margin-top: 28px; text-alig
 .topnav { align-items: center; }
 .brand { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .topnav { flex-shrink: 0; gap: 12px; }
+.brandbox { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
+.hint { font-size: 12px; opacity: .85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

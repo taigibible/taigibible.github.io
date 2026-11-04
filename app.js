@@ -579,11 +579,20 @@ function toggleSel(v) {
   if (!sel.set.size) { clearSelection(); return; }
   sel.active = true;
   const btn = $('#copyBtn'); btn.hidden = false; btn.textContent = `複製（${sel.set.size}）`;
+  updateHint();
 }
 function clearSelection() {
   sel.active = false; sel.set.clear();
   document.querySelectorAll('.verse.sel').forEach(el => el.classList.remove('sel'));
   const btn = $('#copyBtn'); if (btn) btn.hidden = true;
+  updateHint();
+}
+// 標題下的小字提示：只在讀經頁顯示
+function updateHint() {
+  const h = document.getElementById('hint');
+  if (!h) return;
+  h.hidden = currentView.name !== 'chapter';
+  h.textContent = sel.active ? '點其他經節可加選' : '長按經節可複製';
 }
 // 格式：(巴克禮1933) 約 3:16-17 經文 經文 ... 約 3:20 經文
 function selectionText() {
@@ -850,6 +859,7 @@ function route() {
     if (p[0] === 'check') return renderCheck();
     return renderHome();
   } finally {
+    updateHint();
     if (p[0] !== 'c' && !restoreScroll()) window.scrollTo(0, 0);
   }
 }
