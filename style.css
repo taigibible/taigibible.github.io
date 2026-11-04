@@ -5,23 +5,27 @@
   font-display: swap;
 }
 :root {
+  --sel: #dcdcdc;
   --bg: #fbf8f3; --fg: #2a2420; --muted: #7b6f66; --card: #ffffff; --line: #e6ddd2;
   --accent: #7a3b1e; --accent-fg: #ffffff; --hl: #fff1c2; --chip: #f3ece3;
   --fs: 19px;
 }
 :root[data-theme="dark"] {
+  --sel: #4a4a4a;
   --bg: #1b1816; --fg: #ece5dc; --muted: #a39789; --card: #25211e; --line: #3a332d;
   --accent: #e0a27a; --accent-fg: #1b1816; --hl: #4a3b17; --chip: #2f2a25;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]):not([data-theme="dark"]) {
+    --sel: #4a4a4a;
     --bg: #1b1816; --fg: #ece5dc; --muted: #a39789; --card: #25211e; --line: #3a332d;
     --accent: #e0a27a; --accent-fg: #1b1816; --hl: #4a3b17; --chip: #2f2a25;
   }
 }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
-html, body { margin: 0; overflow-x: hidden; }
+html, body { margin: 0; }
+body { overflow-x: clip; }
 body {
   background: var(--bg); color: var(--fg);
   font-family: "POJ", "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", "Segoe UI", system-ui, sans-serif;
@@ -130,3 +134,11 @@ input[type=text], input[type=search], select {
 footer.about { font-size: 13px; color: var(--muted); margin-top: 28px; text-align: center; }
 
 .back { margin: 0 0 10px; padding: 6px 12px; }
+
+.verse { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+.verse.sel { background: var(--sel); }
+.verse.sel .vtext { opacity: .5; }
+.copy-btn { border: 1px solid var(--accent-fg); background: transparent; color: var(--accent-fg); border-radius: 8px; padding: 2px 10px; font-size: 15px; }
+.topnav { align-items: center; }
+.brand { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.topnav { flex-shrink: 0; gap: 12px; }

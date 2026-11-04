@@ -516,7 +516,11 @@ async function renderChapter(b, c, v) {
       <div class="vtext"><span class="vnum">${n2}</span>${esc(t)}</div>
       <button class="star${isBookmarked(b, c, n2) ? ' on' : ''}" type="button" data-v="${n2}" aria-label="書籤">${isBookmarked(b, c, n2) ? '★' : '☆'}</button>
     </li>`).join('');
+  setupSelection(b, c, data);
   $('#verses').onclick = e => {
+    if (Date.now() < sel.suppressUntil) return;
+    const row = e.target.closest('.verse');
+    if (sel.active) { if (row) toggleSel(+row.id.slice(1)); return; }
     const p = e.target.closest('.play'), s = e.target.closest('.star');
     if (p) {
       const vv = +p.dataset.v, cur = player.current();
@@ -540,6 +544,74 @@ function topVisibleVerse() {
 }
 function prevChap(b, c) { if (c > 1) return [b, c - 1]; if (b > 0) return [b - 1, BOOKS[b - 1][2]]; return null; }
 function nextChap(b, c) { if (c < BOOKS[b][2]) return [b, c + 1]; if (b < 65) return [b + 1, 1]; return null; }
+
+/* 選取經節、複製：長按進入選取，點其他節可加選／取消，按「複製」複製到剪貼簿 */
+const sel = { active: false, b: -1, c: -1, set: new Set(), data: [], suppressUntil: 0 };
+function setupSelection(b, c, data) {
+  clearSelection();
+  sel.b = b; sel.c = c; sel.data = data;
+  const list = $('#verses');
+  let timer = 0, sx = 0, sy = 0, longFired = false;
+  const cancel = () => { clearTimeout(timer); timer = 0; };
+  list.addEventListener('pointerdown', e => {
+    const row = e.target.closest('.verse');
+    if (!row || sel.active || e.target.closest('button')) return;
+    sx = e.clientX; sy = e.clientY;
+    cancel();
+    timer = setTimeout(() => {
+      timer = 0; sel.active = true; longFired = true; sel.suppressUntil = Date.now() + 1500;
+      toggleSel(+row.id.slice(1));
+      if (navigator.vibrate) try { navigator.vibrate(30); } catch (err) { }
+    }, 500);
+  });
+  list.addEventListener('pointermove', e => { if (timer && Math.hypot(e.clientX - sx, e.clientY - sy) > 10) cancel(); });
+  ['pointerup', 'pointercancel', 'pointerleave'].forEach(t => list.addEventListener(t, () => {
+    cancel();
+    if (longFired) { longFired = false; sel.suppressUntil = Date.now() + 150; }  // 放開手指後緊接的那一下點擊不算
+  }));
+  list.addEventListener('contextmenu', e => { if (e.target.closest('.verse')) e.preventDefault(); });
+}
+function toggleSel(v) {
+  const row = document.getElementById('v' + v);
+  if (!row) return;
+  if (sel.set.has(v)) sel.set.delete(v); else sel.set.add(v);
+  row.classList.toggle('sel', sel.set.has(v));
+  if (!sel.set.size) { clearSelection(); return; }
+  sel.active = true;
+  const btn = $('#copyBtn'); btn.hidden = false; btn.textContent = `複製（${sel.set.size}）`;
+}
+function clearSelection() {
+  sel.active = false; sel.set.clear();
+  document.querySelectorAll('.verse.sel').forEach(el => el.classList.remove('sel'));
+  const btn = $('#copyBtn'); if (btn) btn.hidden = true;
+}
+// 格式：(巴克禮1933) 約 3:16-17 經文 經文 ... 約 3:20 經文
+function selectionText() {
+  const ab = BOOKS[sel.b][0];
+  const rows = sel.data.filter(([v]) => sel.set.has(v));
+  const order = sel.data.map(([v]) => v);
+  const groups = [];
+  for (const [v, t] of rows) {
+    const g = groups[groups.length - 1];
+    if (g && order.indexOf(v) === order.indexOf(g.last) + 1) { g.last = v; g.texts.push(t); }
+    else groups.push({ first: v, last: v, texts: [t] });
+  }
+  return '(巴克禮1933) ' + groups.map(g =>
+    `${ab} ${sel.c}:${g.first}${g.last !== g.first ? '-' + g.last : ''} ${g.texts.join(' ')}`).join(' ... ');
+}
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); return true; } catch (e) { }
+  try {
+    const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select(); const ok = document.execCommand('copy'); ta.remove(); return ok;
+  } catch (e) { return false; }
+}
+$('#copyBtn').onclick = async () => {
+  if (!sel.set.size) return;
+  const n = sel.set.size, text = selectionText();
+  clearSelection();
+  toast(await copyText(text) ? `已複製 ${n} 節` : '無法複製，請再試一次');
+};
 
 /* 搜尋 */
 const TOTAL_CHAPTERS = BOOKS.reduce((s, x) => s + x[2], 0);
@@ -763,6 +835,7 @@ async function renderCheck() {
 
 /* ---------- 路由 ---------- */
 function route() {
+  clearSelection();
   const h = location.hash.replace(/^#\/?/, '');
   const p = h.split('/');
   try {
