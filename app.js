@@ -594,9 +594,9 @@ function updateHint() {
   h.hidden = currentView.name !== 'chapter';
   h.textContent = sel.active ? '點其他經節可加選' : '長按經節可複製';
 }
-// 格式：約 3:16-17 經文 經文 ... 約 3:20 經文 (巴克禮1933)
+// 格式：經文 經文 ... 經文 約翰福音 3:16-17,20 (巴克禮1933)
 function selectionText() {
-  const ab = BOOKS[sel.b][0];
+  const ab = BOOKS[sel.b][1];  // 書卷全名
   const rows = sel.data.filter(([v]) => sel.set.has(v));
   const order = sel.data.map(([v]) => v);
   const groups = [];
@@ -605,8 +605,9 @@ function selectionText() {
     if (g && order.indexOf(v) === order.indexOf(g.last) + 1) { g.last = v; g.texts.push(t); }
     else groups.push({ first: v, last: v, texts: [t] });
   }
-  return groups.map(g =>
-    `${ab} ${sel.c}:${g.first}${g.last !== g.first ? '-' + g.last : ''} ${g.texts.join(' ')}`).join(' ... ') + ' (巴克禮1933)';
+  const text = groups.map(g => g.texts.join(' ')).join(' ... ');
+  const ref = groups.map(g => `${g.first}${g.last !== g.first ? '-' + g.last : ''}`).join(',');
+  return `${text} ${ab} ${sel.c}:${ref} (巴克禮1933)`;
 }
 async function copyText(text) {
   try { await navigator.clipboard.writeText(text); return true; } catch (e) { }
