@@ -53,6 +53,10 @@ async function idbKeys() {
 }
 
 /* ---------- 取經文 ---------- */
+// 信望愛的漢羅資料在詩句換行處夾有網頁換行碼「<br/>」和全形空白縮排，顯示前拿掉
+const cleanVerse = t => String(t || '')
+  .replace(/(.?)<br\s*\/?>[\s\u3000]*(.?)/gi, (m, a, b) => a + (/[A-Za-z\u00C0-\u024F\u0300-\u036f\u0358\u207f]/.test(a) && /[A-Za-z\u00C0-\u024F]/.test(b) ? ' ' : '') + b)
+  .replace(/<\/?[a-z][^>]*>/gi, '');
 const memCache = new Map();
 async function getChapter(script, b, c) {
   const key = `${script}:${b}:${c}`;
@@ -67,6 +71,7 @@ async function getChapter(script, b, c) {
     data = j.record.map(r => [Number(r.sec), String(r.bible_text || '').trim()]);
     await idbPut(key, data);
   }
+  data = data.map(([v, t]) => [v, cleanVerse(t)]);
   memCache.set(key, data);
   return data;
 }
