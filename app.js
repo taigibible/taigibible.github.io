@@ -361,6 +361,14 @@ function chapterList(fromBook, toBook) {
 }
 function playBooks(fromBook, toBook, label) { location.hash = `#/c/${fromBook}/1`; player.start([], label, chapterList(fromBook, toBook)); }
 
+/* 讓讀經頁的書卷列剛好貼在上排標題下面（上排高度會因提示文字而變） */
+(() => {
+  const tb = document.querySelector('.topbar');
+  const set = () => document.documentElement.style.setProperty('--tb', tb.offsetHeight + 'px');
+  set();
+  if (window.ResizeObserver) new ResizeObserver(set).observe(tb); else window.addEventListener('resize', set);
+})();
+
 /* ---------- 上排的漢羅／全羅切換 ---------- */
 function drawScriptSeg() {
   document.querySelectorAll('#scriptSeg button').forEach(x => x.classList.toggle('on', x.dataset.s === settings.script));
@@ -584,8 +592,13 @@ async function renderChapter(b, c, v) {
   const [ab, full, n] = BOOKS[b];
   store.set('last', { b, c });
   view().innerHTML = `
-    <div class="chap-head">
-      <button class="chap-title" id="chapTitle" type="button" aria-label="選擇書卷、章、節"><h1>${esc(ab)} ${c}｜${esc(full)}</h1><span class="caret">▾</span></button>
+    <div class="subbar" id="subbar">
+      <button class="sb-title" id="chapTitle" type="button" aria-label="選擇書卷、章、節">
+        <span class="sb-en">${esc(BOOK_EN[b])} ${c}｜${esc(BOOK_EN_NAME[b])}</span>
+        <span class="sb-zh"><h1>${esc(ab)} ${c}｜${esc(full)}</h1><span class="caret">▾</span></span>
+      </button>
+      <button class="sb-nav" id="sbPrev" type="button" aria-label="上一章"${prevChap(b, c) ? '' : ' disabled'}>‹</button>
+      <button class="sb-nav" id="sbNext" type="button" aria-label="下一章"${nextChap(b, c) ? '' : ' disabled'}>›</button>
     </div>
     <div class="chap-tools">
       <button class="btn" id="playAll" type="button">▶ 整章播放</button>
@@ -597,6 +610,8 @@ async function renderChapter(b, c, v) {
       ${nextChap(b, c) ? `<a class="btn ghost" style="text-decoration:none" href="#/c/${nextChap(b, c).join('/')}">下一章 ›</a>` : '<span></span>'}
     </div>`;
   $('#chapTitle').onclick = () => openJump({ b, c });
+  $('#sbPrev').onclick = () => { const p = prevChap(b, c); if (p) location.hash = `#/c/${p[0]}/${p[1]}`; };
+  $('#sbNext').onclick = () => { const n2 = nextChap(b, c); if (n2) location.hash = `#/c/${n2[0]}/${n2[1]}`; };
   $('#playAll').onclick = async () => {
     try { const items = await buildRange({ b, c1: c, c2: c, v1: null, v2: null, isRange: true }); player.start(items, refLabel(b, c)); }
     catch (e) { toast(e.message); }
@@ -634,7 +649,9 @@ async function renderChapter(b, c, v) {
 }
 function topVisibleVerse() {
   const els = document.querySelectorAll('.verse');
-  for (const el of els) if (el.getBoundingClientRect().bottom > 70) return el.id.slice(1);
+  const sb = document.getElementById('subbar');
+  const lim = sb ? sb.getBoundingClientRect().bottom : 70;
+  for (const el of els) if (el.getBoundingClientRect().bottom > lim + 4) return el.id.slice(1);
   return null;
 }
 function prevChap(b, c) { if (c > 1) return [b, c - 1]; if (b > 0) return [b - 1, BOOKS[b - 1][2]]; return null; }

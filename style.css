@@ -218,3 +218,18 @@ body.pk-open { overflow: hidden; }
 .hb .zh { font-size: 19px; line-height: 1.3; }
 .hb .nm { font-size: 11.5px; line-height: 1.15; color: var(--muted); max-width: 100%; overflow-wrap: normal; word-break: keep-all; }
 .hb .fz { font-size: 12px; line-height: 1.25; color: var(--muted); max-width: 100%; white-space: nowrap; }
+
+/* 讀經頁：固定在上排下面的書卷列（英文／中文書名＋上一章／下一章） */
+.subbar { position: sticky; top: var(--tb, 52px); z-index: 9; display: flex; align-items: center; gap: 8px;
+  margin: -16px -16px 12px; padding: 8px 16px; background: var(--card); border-bottom: 1px solid var(--line);
+  box-shadow: 0 2px 6px rgba(0,0,0,.06); }
+.sb-title { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; text-align: left;
+  border: 0; background: transparent; color: inherit; font: inherit; padding: 0; cursor: pointer; line-height: 1.2; }
+.sb-en { max-width: 100%; font-size: 13px; font-weight: 600; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sb-zh { max-width: 100%; display: flex; align-items: baseline; white-space: nowrap; overflow: hidden; }
+.sb-zh h1 { margin: 0; font-size: 18px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; }
+.sb-zh .caret { font-size: 13px; color: var(--accent); margin-left: 4px; flex-shrink: 0; }
+.sb-nav { flex-shrink: 0; width: 38px; height: 34px; border-radius: 8px; border: 1px solid var(--accent); background: transparent;
+  color: var(--accent); font-size: 20px; line-height: 1; padding: 0; }
+.sb-nav:disabled { opacity: .3; }
+.verse { scroll-margin-top: calc(var(--tb, 52px) + 70px); }
