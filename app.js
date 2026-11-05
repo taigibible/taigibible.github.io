@@ -356,6 +356,20 @@ function chapterList(fromBook, toBook) {
 }
 function playBooks(fromBook, toBook, label) { location.hash = `#/c/${fromBook}/1`; player.start([], label, chapterList(fromBook, toBook)); }
 
+/* ---------- 上排的漢羅／全羅切換 ---------- */
+function drawScriptSeg() {
+  document.querySelectorAll('#scriptSeg button').forEach(x => x.classList.toggle('on', x.dataset.s === settings.script));
+}
+document.querySelectorAll('#scriptSeg button').forEach(btn => btn.onclick = () => {
+  if (settings.script === btn.dataset.s) return;
+  settings.script = btn.dataset.s; saveSettings(); drawScriptSeg();
+  if (currentView.name === 'chapter') {
+    const { b, c } = currentView, keep = topVisibleVerse();
+    renderChapter(b, c, null).then(() => { if (keep) { const el = document.getElementById('v' + keep); if (el) el.scrollIntoView({ block: 'start' }); } });
+  } else route();
+});
+drawScriptSeg();
+
 /* ---------- 跳到經節（全頁選擇器） ---------- */
 async function openJump(cur) {
   const r = await Picker.open({ mode: 'jump', cur });
@@ -544,10 +558,6 @@ async function renderChapter(b, c, v) {
   view().innerHTML = `
     <div class="chap-head">
       <button class="chap-title" id="chapTitle" type="button" aria-label="選擇書卷、章、節"><h1>${esc(ab)} ${c}｜${esc(full)}</h1><span class="caret">▾</span></button>
-      <div class="seg" role="group" aria-label="文字">
-        <button type="button" data-s="hl" class="${settings.script === 'hl' ? 'on' : ''}">漢羅</button>
-        <button type="button" data-s="cl" class="${settings.script === 'cl' ? 'on' : ''}">全羅</button>
-      </div>
     </div>
     <div class="chap-tools">
       <button class="btn" id="playAll" type="button">▶ 整章播放</button>
@@ -558,11 +568,6 @@ async function renderChapter(b, c, v) {
       ${prevChap(b, c) ? `<a class="btn ghost" style="text-decoration:none" href="#/c/${prevChap(b, c).join('/')}">‹ 上一章</a>` : '<span></span>'}
       ${nextChap(b, c) ? `<a class="btn ghost" style="text-decoration:none" href="#/c/${nextChap(b, c).join('/')}">下一章 ›</a>` : '<span></span>'}
     </div>`;
-  view().querySelectorAll('.seg button').forEach(btn => btn.onclick = () => {
-    settings.script = btn.dataset.s; saveSettings();
-    const keep = topVisibleVerse();
-    renderChapter(b, c, null).then(() => { if (keep) { const el = document.getElementById('v' + keep); if (el) el.scrollIntoView({ block: 'start' }); } });
-  });
   $('#chapTitle').onclick = () => openJump({ b, c });
   $('#playAll').onclick = async () => {
     try { const items = await buildRange({ b, c1: c, c2: c, v1: null, v2: null, isRange: true }); player.start(items, refLabel(b, c)); }
@@ -641,12 +646,14 @@ function toggleSel(v) {
   if (!sel.set.size) { clearSelection(); return; }
   sel.active = true;
   const btn = $('#copyBtn'); btn.hidden = false; btn.textContent = `複製（${sel.set.size}）`;
+  $('#scriptSeg').hidden = true;
   updateHint();
 }
 function clearSelection() {
   sel.active = false; sel.set.clear();
   document.querySelectorAll('.verse.sel').forEach(el => el.classList.remove('sel'));
   const btn = $('#copyBtn'); if (btn) btn.hidden = true;
+  const seg = document.getElementById('scriptSeg'); if (seg) seg.hidden = false;
   updateHint();
 }
 // 標題下的小字提示：只在讀經頁顯示

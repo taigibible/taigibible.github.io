@@ -194,3 +194,16 @@ body.pk-open { overflow: hidden; }
 .chap-title { border: 0; background: transparent; color: inherit; font: inherit; padding: 0; text-align: left; cursor: pointer; }
 .chap-title h1 { display: inline; }
 .chap-title .caret { font-size: 14px; color: var(--accent); margin-left: 4px; }
+
+/* 上排的漢羅／全羅切換 */
+.topseg { display: inline-flex; border: 1px solid var(--accent-fg); border-radius: 8px; overflow: hidden; flex-shrink: 0; }
+.topseg button { border: 0; background: transparent; color: var(--accent-fg); font: inherit; font-size: 13px; padding: 3px 7px; line-height: 1.3; }
+.topseg button.on { background: var(--accent-fg); color: var(--accent); font-weight: 700; }
+@media (max-width: 440px) {
+  .topbar { padding-left: 12px; padding-right: 10px; gap: 6px; }
+  .brand { font-size: 16px; }
+  .topnav { gap: 9px; }
+  .topnav a { font-size: 14px; }
+  .topseg button { padding: 3px 5px; }
+}
+@media (max-width: 365px) { .brand { font-size: 15px; } .topnav { gap: 7px; } .topseg button { font-size: 12px; padding: 3px 4px; } }
