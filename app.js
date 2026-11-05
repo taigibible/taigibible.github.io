@@ -370,6 +370,25 @@ document.querySelectorAll('#scriptSeg button').forEach(btn => btn.onclick = () =
 });
 drawScriptSeg();
 
+/* 首頁書卷格：太長的全名縮小字體，英文只在空格換行、不切斷單字 */
+function fitBookNames() {
+  const probe = document.createElement('span');
+  probe.style.cssText = 'position:absolute;visibility:hidden;white-space:nowrap;left:-9999px';
+  document.body.appendChild(probe);
+  document.querySelectorAll('.hb .nm, .hb .fz').forEach(el => {
+    el.style.fontSize = '';
+    const room = el.parentElement.clientWidth - 6;
+    const parts = el.classList.contains('nm') ? el.textContent.split(' ') : [el.textContent];
+    let f = parseFloat(getComputedStyle(el).fontSize);
+    const widest = () => { probe.style.fontSize = f + 'px'; return Math.max(...parts.map(w => { probe.textContent = w; return probe.offsetWidth; })); };
+    while (f > 7 && widest() > room) f -= 0.5;
+    el.style.fontSize = f + 'px';
+  });
+  probe.remove();
+}
+let fitTimer = 0;
+window.addEventListener('resize', () => { clearTimeout(fitTimer); fitTimer = setTimeout(() => { if (currentView.name === 'home') fitBookNames(); }, 150); });
+
 /* ---------- 跳到經節（全頁選擇器） ---------- */
 async function openJump(cur) {
   const r = await Picker.open({ mode: 'jump', cur });
@@ -457,8 +476,11 @@ const view = () => $('#view');
 function renderHome() {
   currentView = { name: 'home' };
   const last = store.get('last', null);
-  const grid = (from, to) => BOOKS.slice(from, to).map(([ab, full], i) =>
-    `<a href="#/b/${from + i}"><span class="ab">${ab}</span><span class="fn">${full}</span></a>`).join('');
+  const grid = (from, to) => BOOKS.slice(from, to).map(([ab, full], k) => {
+    const i = from + k;
+    return `<a href="#/b/${i}" class="hb cat-${BOOK_CAT[i]}"><span class="en">${BOOK_EN[i]}</span><span class="zh">${ab}</span>` +
+      `<span class="nm" lang="en">${BOOK_EN_NAME[i]}</span><span class="fz">${full}</span></a>`;
+  }).join('');
   view().innerHTML = `
     <div class="box">
       <button class="btn wide" id="jumpBtn" type="button">跳到經節 ›</button>
@@ -482,10 +504,11 @@ function renderHome() {
       <div class="muted" style="font-size:13px;margin-top:6px">要播某一卷：點書卷後按「▶ 播放整卷」。</div>
     </div>
     ${last ? `<p><a href="#/c/${last.b}/${last.c}">繼續閱讀：${esc(refLabel(last.b, last.c))}｜${esc(BOOKS[last.b][1])}</a></p>` : ''}
-    <h2>舊約（39 卷）</h2><div class="grid">${grid(0, OT_COUNT)}</div>
-    <h2>新約（27 卷）</h2><div class="grid">${grid(OT_COUNT, 66)}</div>
+    <h2>舊約（39 卷）</h2><div class="hgrid">${grid(0, OT_COUNT)}</div>
+    <h2>新約（27 卷）</h2><div class="hgrid">${grid(OT_COUNT, 66)}</div>
     <footer class="about">經文：1933 年巴克禮台語譯本，資料來自<a href="https://bible.fhl.net/" target="_blank" rel="noopener">信望愛資訊中心</a><br>真人朗讀：何綉圓、吳嘉雄（信望愛資訊中心，FDL 授權）<br>AI 台語語音：<a href="https://ithuan.tw/" target="_blank" rel="noopener">意傳科技</a></footer>`;
   $('#jumpBtn').onclick = () => openJump(last ? { b: last.b, c: last.c } : null);
+  fitBookNames();
   setupRangeBox();
   view().querySelectorAll('[data-play]').forEach(btn => btn.onclick = () => {
     const k = btn.dataset.play;
