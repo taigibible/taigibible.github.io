@@ -233,3 +233,8 @@ body.pk-open { overflow: hidden; }
   color: var(--accent); font-size: 20px; line-height: 1; padding: 0; }
 .sb-nav:disabled { opacity: .3; }
 .verse { scroll-margin-top: calc(var(--tb, 52px) + 70px); }
+
+/* 上排標題：英文在上、中文在下 */
+.brand { display: flex; flex-direction: column; line-height: 1.15; }
+.brand-en { font-size: 11px; font-weight: 600; opacity: .85; letter-spacing: .02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.brand-zh { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
