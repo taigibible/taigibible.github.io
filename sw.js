@@ -1,5 +1,5 @@
 // 離線支援：存下 app 本身與播放過的語音
-const VERSION = 'v20';
+const VERSION = 'v21';
 const SHELL = 'shell-' + VERSION;
 const AUDIO = 'audio-v1';
 const REAL = 'real-audio-v1';  // 使用者在書卷頁下載的真人錄音
@@ -15,8 +15,8 @@ self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
   if (e.request.method !== 'GET') return;
   if (url.origin === location.origin) {
-    // app 本身：先用網路（拿最新版），沒網路才用存檔
-    e.respondWith(fetch(e.request).then(r => {
+    // app 本身：先用網路，並且不用瀏覽器暫存（一上傳新版就拿得到），沒網路才用存檔
+    e.respondWith(fetch(url.href, { cache: 'no-cache', credentials: 'same-origin' }).then(r => {
       if (r.ok) { const cp = r.clone(); caches.open(SHELL).then(c => c.put(e.request, cp)); }
       return r;
     }).catch(() => caches.match(e.request, { ignoreSearch: true }).then(r => r || caches.match('index.html'))));
