@@ -163,11 +163,11 @@ const player = {
   async loadNextChapter() {
     const tk = this.token;
     while (this.chIdx < this.chapters.length) {
-      const [b, c] = this.chapters[this.chIdx++];
+      const [b, c, from, to] = this.chapters[this.chIdx++];
       try {
         const ch = await getChapter('cl', b, c);
         if (tk !== this.token) return false;
-        const vs = ch.filter(([v, t]) => !isNoteVerse(t));
+        const vs = ch.filter(([v, t]) => !isNoteVerse(t) && (from == null || v >= from) && (to == null || v <= to));
         if (vs.length) { this.queue = vs.map(([v]) => ({ b, c, v })); this.idx = 0; return true; }
       } catch (e) { if (tk === this.token) { toast(e.message); this.stop(); } return false; }
     }
@@ -356,6 +356,75 @@ function chapterList(fromBook, toBook) {
 }
 function playBooks(fromBook, toBook, label) { location.hash = `#/c/${fromBook}/1`; player.start([], label, chapterList(fromBook, toBook)); }
 
+/* ---------- 跳到經節（全頁選擇器） ---------- */
+async function openJump(cur) {
+  const r = await Picker.open({ mode: 'jump', cur });
+  if (!r) return;
+  const h = `#/c/${r.b}/${r.c}${r.v ? '/' + r.v : ''}`;
+  if (location.hash === h) route(); else location.hash = h;
+}
+
+/* ---------- 範圍朗讀：起點、迄點 ---------- */
+const cmpRef = (a, b) => (a.b - b.b) || (a.c - b.c) || (a.v - b.v);
+const refText = r => `${BOOKS[r.b][0]} ${r.c}:${r.v}`;
+function rangeLabel(s, e) {
+  if (s.b !== e.b) return `${refText(s)}－${refText(e)}`;
+  if (s.c !== e.c) return `${refText(s)}-${e.c}:${e.v}`;
+  return s.v === e.v ? refText(s) : `${refText(s)}-${e.v}`;
+}
+function rangeChapters(s, e) {
+  const list = [];
+  for (let b = s.b; b <= e.b; b++) {
+    const c1 = b === s.b ? s.c : 1, c2 = b === e.b ? e.c : BOOKS[b][2];
+    for (let c = c1; c <= c2; c++) list.push([b, c, b === s.b && c === s.c ? s.v : null, b === e.b && c === e.c ? e.v : null]);
+  }
+  return list;
+}
+function rangeVerseCount(s, e) {
+  let n = 0;
+  for (const [b, c, from, to] of rangeChapters(s, e)) n += (to ?? BOOK_VC[b][c - 1]) - (from ?? 1) + 1;
+  return n;
+}
+function setupRangeBox() {
+  const rg = store.get('range', { s: null, e: null });
+  const draw = () => {
+    const set = (el, lbl, r) => {
+      el.classList.toggle('empty', !r);
+      el.innerHTML = `<span class="lbl">${lbl}</span><small>${r ? esc(refText(r)) : '請選擇'}</small>`;
+    };
+    set($('#rStart'), '起', rg.s); set($('#rEnd'), '迄', rg.e);
+    const ok = rg.s && rg.e;
+    const btn = $('#rangePlay');
+    btn.disabled = !ok;
+    btn.textContent = ok ? `▶ 朗讀（共 ${rangeVerseCount(rg.s, rg.e)} 節）` : '▶ 朗讀';
+    store.set('range', rg);
+  };
+  draw();
+  $('#rStart').onclick = async () => {
+    const r = await Picker.open({ mode: 'start', cur: rg.s });
+    if (!r) return;
+    rg.s = r;
+    const warn = $('#rangeWarn');
+    if (rg.e && cmpRef(rg.e, rg.s) < 0) {
+      warn.textContent = `起點改到 ${refText(rg.s)}，比原本的迄點 ${refText(rg.e)} 還後面，所以迄點已清除，請重選。`;
+      rg.e = null;
+    } else if (warn) warn.textContent = '';
+    draw();
+  };
+  $('#rEnd').onclick = async () => {
+    if (!rg.s) { toast('請先選起點'); return; }
+    const r = await Picker.open({ mode: 'end', min: rg.s, startBook: rg.e ? rg.e.b : rg.s.b, cur: rg.e });
+    if (!r) return;
+    rg.e = r; $('#rangeWarn').textContent = '';
+    draw();
+  };
+  $('#rangePlay').onclick = () => {
+    if (!rg.s || !rg.e) return;
+    location.hash = `#/c/${rg.s.b}/${rg.s.c}`;
+    player.start([], rangeLabel(rg.s, rg.e), rangeChapters(rg.s, rg.e));
+  };
+}
+
 /* ---------- 書籤、上次位置 ---------- */
 const getBookmarks = () => store.get('bookmarks', []);
 const isBookmarked = (b, c, v) => getBookmarks().some(x => x.b === b && x.c === c && x.v === v);
@@ -378,19 +447,16 @@ function renderHome() {
     `<a href="#/b/${from + i}"><span class="ab">${ab}</span><span class="fn">${full}</span></a>`).join('');
   view().innerHTML = `
     <div class="box">
-      <form id="jumpForm" class="row" autocomplete="off">
-        <input id="jumpInput" type="text" placeholder="跳到經節，例：約 3:16" aria-label="跳到經節">
-        <button class="btn" type="submit">前往</button>
-      </form>
-      <div id="jumpErr" class="err"></div>
+      <button class="btn wide" id="jumpBtn" type="button">跳到經節 ›</button>
     </div>
     <div class="box">
-      <div class="muted" style="font-size:14px;margin-bottom:6px">範圍朗讀（可跨章）</div>
-      <form id="rangeForm" class="row" autocomplete="off">
-        <input id="rangeInput" type="text" placeholder="例：提後 3:14-4:5" aria-label="範圍朗讀" value="${esc(store.get('lastRange', ''))}">
-        <button class="btn" type="submit">▶ 朗讀</button>
-      </form>
-      <div id="rangeErr" class="err"></div>
+      <div class="muted" style="font-size:14px;margin-bottom:6px">範圍朗讀（可跨章、跨卷）</div>
+      <div class="pick">
+        <button class="pickbtn" id="rStart" type="button"></button>
+        <button class="pickbtn" id="rEnd" type="button"></button>
+      </div>
+      <div id="rangeWarn" class="err" style="margin:0 0 8px"></div>
+      <button class="btn wide" id="rangePlay" type="button"></button>
     </div>
     <div class="box">
       <div class="muted" style="font-size:14px;margin-bottom:6px">連續播放</div>
@@ -405,13 +471,8 @@ function renderHome() {
     <h2>舊約（39 卷）</h2><div class="grid">${grid(0, OT_COUNT)}</div>
     <h2>新約（27 卷）</h2><div class="grid">${grid(OT_COUNT, 66)}</div>
     <footer class="about">經文：1933 年巴克禮台語譯本，資料來自<a href="https://bible.fhl.net/" target="_blank" rel="noopener">信望愛資訊中心</a><br>真人朗讀：何綉圓、吳嘉雄（信望愛資訊中心，FDL 授權）<br>AI 台語語音：<a href="https://ithuan.tw/" target="_blank" rel="noopener">意傳科技</a></footer>`;
-  $('#jumpForm').onsubmit = e => {
-    e.preventDefault();
-    const r = parseRef($('#jumpInput').value);
-    if (r.err) { $('#jumpErr').textContent = r.err; return; }
-    location.hash = `#/c/${r.b}/${r.c1}${r.v1 ? '/' + r.v1 : ''}`;
-  };
-  $('#rangeForm').onsubmit = e => { e.preventDefault(); playRange($('#rangeInput').value, $('#rangeErr')); };
+  $('#jumpBtn').onclick = () => openJump(last ? { b: last.b, c: last.c } : null);
+  setupRangeBox();
   view().querySelectorAll('[data-play]').forEach(btn => btn.onclick = () => {
     const k = btn.dataset.play;
     if (k === 'all') playBooks(0, 66, '整本聖經');
@@ -482,7 +543,7 @@ async function renderChapter(b, c, v) {
   store.set('last', { b, c });
   view().innerHTML = `
     <div class="chap-head">
-      <h1>${esc(ab)} ${c}｜${esc(full)}</h1>
+      <button class="chap-title" id="chapTitle" type="button" aria-label="選擇書卷、章、節"><h1>${esc(ab)} ${c}｜${esc(full)}</h1><span class="caret">▾</span></button>
       <div class="seg" role="group" aria-label="文字">
         <button type="button" data-s="hl" class="${settings.script === 'hl' ? 'on' : ''}">漢羅</button>
         <button type="button" data-s="cl" class="${settings.script === 'cl' ? 'on' : ''}">全羅</button>
@@ -502,6 +563,7 @@ async function renderChapter(b, c, v) {
     const keep = topVisibleVerse();
     renderChapter(b, c, null).then(() => { if (keep) { const el = document.getElementById('v' + keep); if (el) el.scrollIntoView({ block: 'start' }); } });
   });
+  $('#chapTitle').onclick = () => openJump({ b, c });
   $('#playAll').onclick = async () => {
     try { const items = await buildRange({ b, c1: c, c2: c, v1: null, v2: null, isRange: true }); player.start(items, refLabel(b, c)); }
     catch (e) { toast(e.message); }

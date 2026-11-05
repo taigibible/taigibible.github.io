@@ -6,18 +6,21 @@
 }
 :root {
   --sel: #dcdcdc;
+  --c-law:#4f53c0; --c-his:#a65c14; --c-poe:#23804a; --c-maj:#b8345f; --c-min:#7d6e00; --c-gos:#c4520f; --c-act:#0f7f90; --c-pau:#8c7000; --c-gen:#2f8424; --c-rev:#b83452;
   --bg: #fbf8f3; --fg: #2a2420; --muted: #7b6f66; --card: #ffffff; --line: #e6ddd2;
   --accent: #7a3b1e; --accent-fg: #ffffff; --hl: #fff1c2; --chip: #f3ece3;
   --fs: 19px;
 }
 :root[data-theme="dark"] {
   --sel: #4a4a4a;
+  --c-law:#c5c8f5; --c-his:#f5c79a; --c-poe:#8fe0a0; --c-maj:#f29ab6; --c-min:#f2e7a0; --c-gos:#f0803c; --c-act:#6fe3f0; --c-pau:#f5e663; --c-gen:#7ee06f; --c-rev:#f07c9a;
   --bg: #1b1816; --fg: #ece5dc; --muted: #a39789; --card: #25211e; --line: #3a332d;
   --accent: #e0a27a; --accent-fg: #1b1816; --hl: #4a3b17; --chip: #2f2a25;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]):not([data-theme="dark"]) {
     --sel: #4a4a4a;
+    --c-law:#c5c8f5; --c-his:#f5c79a; --c-poe:#8fe0a0; --c-maj:#f29ab6; --c-min:#f2e7a0; --c-gos:#f0803c; --c-act:#6fe3f0; --c-pau:#f5e663; --c-gen:#7ee06f; --c-rev:#f07c9a;
     --bg: #1b1816; --fg: #ece5dc; --muted: #a39789; --card: #25211e; --line: #3a332d;
     --accent: #e0a27a; --accent-fg: #1b1816; --hl: #4a3b17; --chip: #2f2a25;
   }
@@ -144,3 +147,50 @@ footer.about { font-size: 13px; color: var(--muted); margin-top: 28px; text-alig
 .topnav { flex-shrink: 0; gap: 12px; }
 .brandbox { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
 .hint { font-size: 12px; opacity: .85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ---------- 書卷／章／節 選擇器 ---------- */
+body.pk-open { overflow: hidden; }
+.picker { position: fixed; inset: 0; z-index: 60; background: var(--bg); display: flex; flex-direction: column; }
+.pk-bar { display: flex; align-items: center; gap: 6px; padding: 8px 8px; padding-top: calc(8px + env(safe-area-inset-top));
+  background: var(--accent); color: var(--accent-fg); }
+.pk-icon { border: 0; background: transparent; color: inherit; font-size: 22px; width: 44px; height: 44px; border-radius: 10px; }
+.pk-title { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
+.pk-t { font-weight: 700; font-size: 17px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pk-s { font-size: 12px; opacity: .85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pk-s:empty { display: none; }
+.pk-body { flex: 1; overflow-y: auto; display: flex; flex-direction: column; padding-bottom: env(safe-area-inset-bottom); }
+.pk-grid { display: grid; border-top: 1px solid var(--line); border-left: 1px solid var(--line); }
+.pk-books { grid-template-columns: repeat(6, 1fr); grid-auto-rows: minmax(52px, 1fr); flex: 1; }
+.pk-chaps { grid-template-columns: repeat(5, 1fr); grid-auto-rows: 70px; }
+.pk-verses { grid-template-columns: repeat(5, 1fr); grid-auto-rows: 64px; }
+.pk-cell { position: relative; border: 0; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line);
+  background: transparent; color: var(--fg); display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 2px; min-width: 0; font: inherit; }
+.pk-cell:active { background: var(--sel); }
+.pk-en { font-size: 15px; font-weight: 600; line-height: 1.15; }
+.pk-zh { font-size: 17px; line-height: 1.25; }
+.pk-num { font-size: 22px; }
+.pk-cell small { position: absolute; right: 6px; bottom: 4px; font-size: 12px; color: var(--muted); }
+.pk-cell.cur { background: var(--sel); }
+.pk-cell.mark { box-shadow: inset 0 0 0 2px var(--accent); }
+.pk-cell.dis { opacity: .25; }
+.pk-tag { position: absolute; left: 5px; top: 3px; font-size: 11px; font-weight: 700; color: var(--accent); }
+.pk-quick { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px; }
+.pk-quick .btn { flex: 1 1 140px; }
+.cat-law { color: var(--c-law); } .cat-his { color: var(--c-his); } .cat-poe { color: var(--c-poe); } .cat-maj { color: var(--c-maj); }
+.cat-min { color: var(--c-min); } .cat-gos { color: var(--c-gos); } .cat-act { color: var(--c-act); } .cat-pau { color: var(--c-pau); }
+.cat-gen { color: var(--c-gen); } .cat-rev { color: var(--c-rev); }
+
+/* 首頁：跳到經節、範圍朗讀 */
+.btn.wide { display: block; width: 100%; text-align: center; font-size: 17px; padding: 11px; }
+.pick { display: flex; gap: 8px; margin-bottom: 8px; }
+.pickbtn { flex: 1; min-width: 0; text-align: left; padding: 8px 10px; border-radius: 9px; border: 1px solid var(--accent);
+  background: var(--card); color: var(--fg); font: inherit; line-height: 1.35; }
+.pickbtn small { display: block; font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pickbtn .lbl { font-size: 13px; color: var(--muted); }
+.pickbtn.empty { border-style: dashed; }
+.pickbtn.empty small { color: var(--muted); font-weight: 400; }
+.btn:disabled { opacity: .45; cursor: default; }
+.chap-title { border: 0; background: transparent; color: inherit; font: inherit; padding: 0; text-align: left; cursor: pointer; }
+.chap-title h1 { display: inline; }
+.chap-title .caret { font-size: 14px; color: var(--accent); margin-left: 4px; }
