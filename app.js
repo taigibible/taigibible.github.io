@@ -182,7 +182,7 @@ const player = {
     const tk = ++this.token;
     const it = this.queue[this.idx];
     if (!it) { this.stop(); return; }
-    updatePlayerUI('載入語音中…');
+    updatePlayerUI(this.paused ? '已暫停' : '載入語音中…');
     markPlaying(it);
     let text;
     try {
@@ -277,6 +277,26 @@ const player = {
     if (this.audio) { if (this.paused) this.audio.pause(); else this.audio.play().catch(() => { }); }
     updatePlayerUI(this.paused ? '已暫停' : '朗讀中');
   },
+  // ⏮ / ⏭：上一節、下一節（範圍播放時才有）
+  async skip(d) {
+    if (!this.active) return;
+    this.token++; clearInterval(this.watch);
+    if (this.audio) { try { this.audio.pause(); } catch (e) { } }
+    if (d > 0) {
+      if (this.idx + 1 < this.queue.length) this.idx++;
+      else if (this.chIdx < this.chapters.length) { if (!(await this.loadNextChapter())) return; }
+      else { this.stop(); return; }
+    } else {
+      if (this.idx > 0) this.idx--;
+      else if (this.chIdx >= 2) {
+        this.chIdx -= 2;
+        if (!(await this.loadNextChapter())) return;
+        this.idx = this.queue.length - 1;
+      }
+    }
+    await this.playCurrent();
+    if (this.paused) updatePlayerUI('已暫停');
+  },
   stop(silent) {
     this.token++;
     clearInterval(this.watch);
@@ -303,8 +323,11 @@ function updatePlayerUI(status) {
   if (!it) return;
   const total = player.queue.length;
   const long = player.chTotal > 1;
-  $('#playerLabel').textContent = refLabel(it.b, it.c, it.v) + (!long && total > 1 ? `（${player.idx + 1}/${total}）` : '');
-  $('#playerStatus').textContent = (long ? `${player.label}・第 ${player.chIdx}/${player.chTotal} 章　` : '') + (status || '');
+  $('#playerLabel').textContent = refLabel(it.b, it.c, it.v);
+  // 整卷／全本播放：只放「節進度 · 章進度」兩組數字，窄手機也放得下
+  $('#playerStatus').textContent = long ? `${player.idx + 1}/${total} · ${player.chIdx}/${player.chTotal}${player.paused ? ' · 已暫停' : ''}`
+    : [total > 1 ? `${player.idx + 1}/${total}` : '', status || ''].filter(Boolean).join(' · ');
+  $('#playerPrev').hidden = $('#playerNext').hidden = !(total > 1 || long);
 }
 function markPlaying(it) {
   document.querySelectorAll('.verse.playing').forEach(el => el.classList.remove('playing'));
@@ -324,6 +347,8 @@ function markPlaying(it) {
   }
 }
 $('#playerPause').onclick = () => player.togglePause();
+$('#playerPrev').onclick = () => player.skip(-1);
+$('#playerNext').onclick = () => player.skip(1);
 $('#playerStop').onclick = () => player.stop();
 
 async function buildRange(r) {
@@ -1006,6 +1031,57 @@ window.addEventListener('hashchange', e => {
   route();
 });
 route();
+
+/* ---------- 安裝按鈕（上方「安裝／已安裝」） ---------- */
+let deferredPrompt = null;
+const isStandalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+function setInstallBtn(state) {   // 'install' | 'installed' | 'hide'
+  const bt = document.getElementById('installBtn'); if (!bt) return;
+  if (state === 'hide') { bt.hidden = true; return; }
+  bt.hidden = false; bt.classList.toggle('done', state === 'installed');
+  bt.textContent = state === 'installed' ? '已安裝' : '安裝';
+}
+function showInstallHelp() {
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const steps = ios
+    ? '<li>用 <b>Safari</b> 打開這個網站</li><li>按下方的「分享」按鈕 <b>⬆︎</b></li><li>選「<b>加入主畫面</b>」，再按「新增」</li>'
+    : '<li>用 <b>Chrome</b> 打開這個網站</li><li>按右上角的 <b>⋮</b> 選單</li><li>選「<b>安裝應用程式</b>」或「<b>加到主畫面</b>」</li>';
+  const box = document.createElement('div');
+  box.className = 'modal';
+  box.innerHTML = `<div class="modal-card"><h2>安裝到主畫面</h2><ol>${steps}</ol>
+    <p class="muted" style="font-size:13px">安裝後可以像一般 App 一樣從主畫面打開，也能離線閱讀。</p>
+    <button class="btn wide" type="button">知道了</button></div>`;
+  box.onclick = e => { if (e.target === box || e.target.closest('button')) box.remove(); };
+  document.body.appendChild(box);
+}
+if (isStandalone()) setInstallBtn('hide');
+else {
+  setInstallBtn(store.get('installed', false) ? 'installed' : 'install');
+  if (navigator.getInstalledRelatedApps) navigator.getInstalledRelatedApps().then(l => { if (l && l.length) setInstallBtn('installed'); }).catch(() => { });
+}
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault(); deferredPrompt = e;
+  store.set('installed', false);
+  if (!isStandalone()) setInstallBtn('install');
+});
+window.addEventListener('appinstalled', () => {
+  deferredPrompt = null; store.set('installed', true);
+  setInstallBtn(isStandalone() ? 'hide' : 'installed');
+  toast('安裝完成', 3000);
+});
+document.getElementById('installBtn').onclick = async () => {
+  if (deferredPrompt) {
+    const p = deferredPrompt; deferredPrompt = null;
+    p.prompt();
+    const r = await p.userChoice.catch(() => null);
+    if (r && r.outcome === 'accepted') { store.set('installed', true); setInstallBtn('installed'); }
+    return;
+  }
+  if (document.getElementById('installBtn').classList.contains('done')) {
+    toast('已經安裝過了，可以從主畫面的「台語聖經」圖示打開。', 4000); return;
+  }
+  showInstallHelp();
+};
 
 /* ---------- 離線支援 ---------- */
 if ('serviceWorker' in navigator && location.protocol === 'https:') {

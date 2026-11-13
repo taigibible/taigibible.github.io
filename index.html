@@ -24,6 +24,7 @@
       <button type="button" data-s="hl">漢羅</button><button type="button" data-s="cl">全羅</button>
     </div>
     <button id="copyBtn" class="copy-btn" type="button" hidden>複製</button>
+    <button id="installBtn" class="install-btn" type="button" hidden>安裝</button>
     <a href="#/search" aria-label="搜尋">搜尋</a>
     <a href="#/bookmarks" aria-label="書籤">書籤</a>
     <a href="#/settings" aria-label="設定">設定</a>
@@ -33,7 +34,9 @@
 <div id="player" class="player" hidden>
   <div class="player-info"><span id="playerLabel"></span><span id="playerStatus" class="muted"></span></div>
   <div class="player-btns">
+    <button id="playerPrev" class="pb-icon" type="button" aria-label="上一節" hidden><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M6 5h2.5v14H6zM20 5v14L9.5 12z" fill="currentColor"/></svg></button>
     <button id="playerPause" type="button">暫停</button>
+    <button id="playerNext" class="pb-icon" type="button" aria-label="下一節" hidden><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M15.5 5H18v14h-2.5zM4 5v14l10.5-7z" fill="currentColor"/></svg></button>
     <button id="playerStop" type="button">停止</button>
   </div>
 </div>

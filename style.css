@@ -238,3 +238,21 @@ body.pk-open { overflow: hidden; }
 .brand { display: flex; flex-direction: column; line-height: 1.15; }
 .brand-en { font-size: 11px; font-weight: 600; opacity: .85; letter-spacing: .02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .brand-zh { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.install-btn { border: 1.5px solid var(--accent-fg); background: transparent; color: var(--accent-fg); border-radius: 8px; padding: 2px 7px; font: inherit; font-size: 14px; line-height: 1.3; flex-shrink: 0; }
+.install-btn.done { opacity: .75; border-style: dashed; }
+#copyBtn:not([hidden]) ~ .install-btn { display: none; }
+.install-btn[hidden] { display: none; }
+@media (max-width: 365px) { .install-btn { font-size: 12px; padding: 2px 5px; } }
+.modal { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 16px; }
+.modal-card { background: var(--card); color: var(--fg); border-radius: 14px; padding: 18px; max-width: 360px; width: 100%; box-shadow: 0 8px 30px rgba(0,0,0,.3); }
+.modal-card h2 { margin: 0 0 10px; font-size: 18px; color: var(--fg); }
+.modal-card ol { padding-left: 20px; line-height: 1.8; margin: 0 0 10px; }
+.player-btns { gap: 6px; }
+.player-btns button { padding: 8px 10px; min-width: 52px; }
+.player-btns .pb-icon { min-width: 40px; padding: 6px 8px; display: inline-flex; align-items: center; justify-content: center; }
+.player-btns button[hidden] { display: none; }
+@media (max-width: 440px) { .brand-zh { font-size: 15px; } }
+@media (max-width: 380px) { .brand-zh { font-size: 14px; } .brand-en { font-size: 10px; } }
+@media (max-width: 340px) { .brand-zh { font-size: 12.5px; } }
+@media (max-width: 380px) { .topnav { gap: 7px; } .topseg button { font-size: 12px; padding: 3px 4px; } .install-btn { font-size: 12px; padding: 2px 5px; } }
+@media (max-width: 340px) { .topnav { gap: 5px; } .topnav a { font-size: 13px; } }
