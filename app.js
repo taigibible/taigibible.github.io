@@ -4,7 +4,7 @@
 const FHL = 'https://bible.fhl.net/json/qb.php';
 const TTS = 'https://hapsing.ithuan.tw/bangtsam?taibun=';
 const VERS = { hl: 'bklhl', cl: 'bklcl' };
-// 真人朗讀錄音（何綉圓、吳嘉雄朗讀，信望愛資訊中心，FDL 授權）
+// 真人朗讀錄音（何女士朗讀，信望愛資訊中心，FDL 授權）
 const REAL_BASE = { ot: 'https://scottman58.github.io/taigi-bible-audio-ot/', nt: 'https://scottman58.github.io/taigi-bible-audio-nt/' };
 const REAL_CACHE = 'real-audio-v1';
 const realPath = (b, c) => `${String(b + 1).padStart(2, '0')}/${String(c).padStart(3, '0')}`;
@@ -544,7 +544,7 @@ function renderHome() {
     ${last ? `<p><a href="#/c/${last.b}/${last.c}">繼續閱讀：${esc(refLabel(last.b, last.c))}｜${esc(BOOKS[last.b][1])}</a></p>` : ''}
     <h2>舊約（39 卷）</h2><div class="hgrid">${grid(0, OT_COUNT)}</div>
     <h2>新約（27 卷）</h2><div class="hgrid">${grid(OT_COUNT, 66)}</div>
-    <footer class="about">經文：1933 年巴克禮台語譯本，資料來自<a href="https://bible.fhl.net/" target="_blank" rel="noopener">信望愛資訊中心</a><br>真人朗讀：何綉圓、吳嘉雄（信望愛資訊中心，FDL 授權）<br>AI 台語語音：<a href="https://ithuan.tw/" target="_blank" rel="noopener">意傳科技</a></footer>`;
+    <footer class="about">經文：1933 年巴克禮台語譯本，資料來自<a href="https://bible.fhl.net/" target="_blank" rel="noopener">信望愛資訊中心</a><br>真人朗讀：何女士（信望愛資訊中心，FDL 授權）<br>AI 台語語音：<a href="https://ithuan.tw/" target="_blank" rel="noopener">意傳科技</a></footer>`;
   $('#jumpBtn').onclick = () => openJump(last ? { b: last.b, c: last.c } : null);
   fitBookNames();
   setupRangeBox();
@@ -878,7 +878,7 @@ async function renderSettings() {
         <button type="button" data-voice="real" class="${settings.voice !== 'ai' ? 'on' : ''}">真人朗讀</button>
         <button type="button" data-voice="ai" class="${settings.voice === 'ai' ? 'on' : ''}">AI 語音</button>
       </div>
-      <div class="muted" style="font-size:13px;margin-top:6px">真人朗讀：何綉圓、吳嘉雄（信望愛資訊中心）。錄音缺少的經節會自動改用 AI 語音。<a href="#/check">抽查朗讀是否對準</a></div>
+      <div class="muted" style="font-size:13px;margin-top:6px">真人朗讀：何女士（信望愛資訊中心）。錄音缺少的經節會自動改用 AI 語音。<a href="#/check">抽查朗讀是否對準</a></div>
     </div>
     <div class="box">
       <div style="margin-bottom:8px">外觀</div>
@@ -895,7 +895,7 @@ async function renderSettings() {
       <div class="progress"><div id="dlBar" style="width:${Math.round((n.hl + n.cl) / (2 * TOTAL_CHAPTERS) * 100)}%"></div></div>
       <div id="dlMsg" class="muted" style="font-size:14px;margin-top:6px"></div>
     </div>
-    <footer class="about">經文：1933 年巴克禮台語譯本，資料來自<a href="https://bible.fhl.net/" target="_blank" rel="noopener">信望愛資訊中心</a><br>真人朗讀：何綉圓、吳嘉雄（信望愛資訊中心，FDL 授權）　AI 台語語音：<a href="https://ithuan.tw/" target="_blank" rel="noopener">意傳科技</a></footer>`;
+    <footer class="about">經文：1933 年巴克禮台語譯本，資料來自<a href="https://bible.fhl.net/" target="_blank" rel="noopener">信望愛資訊中心</a><br>真人朗讀：何女士（信望愛資訊中心，FDL 授權）　AI 台語語音：<a href="https://ithuan.tw/" target="_blank" rel="noopener">意傳科技</a></footer>`;
   const setFs = d => { settings.fs = Math.min(32, Math.max(14, settings.fs + d)); saveSettings(); $('#fsVal').textContent = settings.fs; };
   $('#fsDown').onclick = () => setFs(-1);
   $('#fsUp').onclick = () => setFs(+1);
