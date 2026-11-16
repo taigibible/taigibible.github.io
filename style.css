@@ -257,3 +257,5 @@ body.pk-open { overflow: hidden; }
 @media (max-width: 380px) { .topnav { gap: 7px; } .topseg button { font-size: 12px; padding: 3px 4px; } .install-btn { font-size: 12px; padding: 2px 5px; } }
 @media (max-width: 340px) { .topnav { gap: 5px; } .topnav a { font-size: 13px; } }
 .seo-intro { padding: 8px 4px; } .seo-intro h1 { font-size: 20px; }
+.player-btns .pb-loop { opacity: .45; }
+.player-btns .pb-loop.on { opacity: 1; background: var(--accent); color: var(--accent-fg); }

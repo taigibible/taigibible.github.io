@@ -13,6 +13,7 @@ const $ = (sel, el = document) => el.querySelector(sel);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 /* ---------- 本機儲存（失敗也不影響使用） ---------- */
+const APP_VER = 'v1.025';  // 版本編號：v1.XXX，遇到 13 跳過
 const store = {
   get(k, d) { try { const v = localStorage.getItem('tb:' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem('tb:' + k, JSON.stringify(v)); } catch (e) { } }
@@ -157,6 +158,7 @@ const player = {
   chapters: [], chIdx: 0, chTotal: 0,
   async start(items, label, chapters) {
     this.stop(true);
+    this.orig = { items: items.slice(), chapters: (chapters || []).slice() };  // 整段循環時從頭再播
     this.chapters = chapters || []; this.chIdx = 0; this.chTotal = this.chapters.length;
     if (!items.length && !this.chapters.length) return;
     this.queue = items; this.idx = 0; this.active = true; this.paused = false; this.label = label;
@@ -211,7 +213,7 @@ const player = {
     };
     a.onplaying = () => { if (tk === this.token) updatePlayerUI('朗讀中'); };
     try { a.currentTime = 0; } catch (e) { }
-    if (!this.paused) a.play().catch(err => { if (tk === this.token && err.name !== 'AbortError') { updatePlayerUI('請按「繼續」開始播放'); this.paused = true; $('#playerPause').textContent = '繼續'; } });
+    if (!this.paused) a.play().catch(err => { if (tk === this.token && err.name !== 'AbortError') { updatePlayerUI('請按 ▶ 開始播放'); this.paused = true; setPauseIcon(true); } });
     // 預先載入下一節
     const nx = this.queue[this.idx + 1];
     if (!nx && this.chIdx < this.chapters.length) { const [nb, nc] = this.chapters[this.chIdx]; getChapter('cl', nb, nc).catch(() => { }); }
@@ -236,7 +238,7 @@ const player = {
       const seek = () => { try { a.currentTime = seg.start; } catch (e) { } };
       if (a.readyState >= 1) seek(); else a.addEventListener('loadedmetadata', seek, { once: true });
     }
-    if (!this.paused) a.play().catch(err => { if (tk === this.token && err.name !== 'AbortError') { updatePlayerUI('請按「繼續」開始播放'); this.paused = true; $('#playerPause').textContent = '繼續'; } });
+    if (!this.paused) a.play().catch(err => { if (tk === this.token && err.name !== 'AbortError') { updatePlayerUI('請按 ▶ 開始播放'); this.paused = true; setPauseIcon(true); } });
     clearInterval(this.watch);
     this.watch = setInterval(() => {
       if (tk !== this.token) { clearInterval(this.watch); return; }
@@ -244,7 +246,7 @@ const player = {
       // 下一節在同一章、緊接著 → 不停頓，直接接著唸
       const nx = this.queue[this.idx + 1];
       const ns = nx && nx.b === it.b && nx.c === it.c ? tm.get(nx.v) : null;
-      if (ns && ns.start - this.segEnd < 1.0 && ns.start >= this.segEnd - 1.0) {
+      if (loopMode !== 'one' && ns && ns.start - this.segEnd < 1.0 && ns.start >= this.segEnd - 1.0) {
         this.idx++; this.segEnd = ns.end; markPlaying(nx); updatePlayerUI(this.paused ? '已暫停' : '朗讀中（真人）');
         it = nx;
         return;
@@ -261,19 +263,33 @@ const player = {
     clearInterval(this.watch);
     const nx = this.queue[this.idx + 1];
     const cur = this.queue[this.idx];
-    if (!(nx && cur && nx.b === cur.b && nx.c === cur.c)) { try { realAudio.pause(); } catch (e) { } }
+    const atEnd = !nx && this.chIdx >= this.chapters.length;
+    if (loopMode === 'one' || atEnd || !(nx && cur && nx.b === cur.b && nx.c === cur.c)) { try { realAudio.pause(); } catch (e) { } }
     this.next();
   },
   async next() {
+    if (loopMode === 'one') return this.later(600, () => this.playCurrent());   // 單節循環：同一節再念一次
     this.idx++;
     if (this.idx < this.queue.length) return this.playCurrent();
     if (this.chIdx < this.chapters.length) { if (await this.loadNextChapter()) this.playCurrent(); return; }
+    if (loopMode === 'all') return this.later(1000, () => this.restart());        // 整段循環：回到開頭
     this.stop();
+  },
+  later(ms, fn) {
+    const tk = ++this.token;
+    setTimeout(() => { if (tk === this.token && this.active) fn(); }, ms);
+  },
+  async restart() {
+    const o = this.orig || { items: [], chapters: [] };
+    this.chapters = o.chapters.slice(); this.chIdx = 0;
+    this.queue = o.items.slice(); this.idx = 0;
+    if (!this.queue.length && !(await this.loadNextChapter())) return;
+    this.playCurrent();
   },
   togglePause() {
     if (!this.active) return;
     this.paused = !this.paused;
-    $('#playerPause').textContent = this.paused ? '繼續' : '暫停';
+    setPauseIcon(this.paused);
     if (this.audio) { if (this.paused) this.audio.pause(); else this.audio.play().catch(() => { }); }
     updatePlayerUI(this.paused ? '已暫停' : '朗讀中');
   },
@@ -285,6 +301,7 @@ const player = {
     if (d > 0) {
       if (this.idx + 1 < this.queue.length) this.idx++;
       else if (this.chIdx < this.chapters.length) { if (!(await this.loadNextChapter())) return; }
+      else if (loopMode === 'all') { await this.restart(); if (this.paused) updatePlayerUI('已暫停'); return; }
       else { this.stop(); return; }
     } else {
       if (this.idx > 0) this.idx--;
@@ -302,7 +319,7 @@ const player = {
     clearInterval(this.watch);
     if (this.audio) { try { this.audio.pause(); } catch (e) { } this.audio.onended = this.audio.onerror = this.audio.onplaying = null; }
     this.audio = null; this.active = false; this.queue = []; this.paused = false; this.chapters = []; this.chIdx = this.chTotal = 0;
-    $('#playerPause').textContent = '暫停';
+    setPauseIcon(false);
     if (!silent) $('#player').hidden = true;
     markPlaying(null);
   },
@@ -347,6 +364,31 @@ function markPlaying(it) {
   }
 }
 $('#playerPause').onclick = () => player.togglePause();
+// 播放鍵圖示
+const ICON = {
+  pause: '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M6 5h4v14H6zM14 5h4v14h-4z" fill="currentColor"/></svg>',
+  play: '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M7 4.5v15l12.5-7.5z" fill="currentColor"/></svg>',
+  loop: '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M7 7h10v3l4-4-4-4v3H5v6h2zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2z" fill="currentColor"/></svg>',
+  loop1: '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M7 7h10v3l4-4-4-4v3H5v6h2zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2zm-4-2V9h-1l-2 1v1h1.5v4z" fill="currentColor"/></svg>'
+};
+function setPauseIcon(paused) {
+  const b = $('#playerPause'); b.innerHTML = paused ? ICON.play : ICON.pause;
+  b.setAttribute('aria-label', paused ? '繼續' : '暫停');
+}
+// 循環：off → all（整段）→ one（單節）
+let loopMode = store.get('loop', 'off');
+function setLoopUI() {
+  const b = $('#playerLoop');
+  b.innerHTML = loopMode === 'one' ? ICON.loop1 : ICON.loop;
+  b.classList.toggle('on', loopMode !== 'off');
+  b.setAttribute('aria-label', loopMode === 'off' ? '循環：關' : loopMode === 'all' ? '循環：整段' : '循環：單節');
+}
+$('#playerLoop').onclick = () => {
+  loopMode = loopMode === 'off' ? 'all' : loopMode === 'all' ? 'one' : 'off';
+  store.set('loop', loopMode); setLoopUI();
+  toast(loopMode === 'off' ? '不循環' : loopMode === 'all' ? '整段循環' : '單節循環', 1500);
+};
+setPauseIcon(false); setLoopUI();
 $('#playerPrev').onclick = () => player.skip(-1);
 $('#playerNext').onclick = () => player.skip(1);
 $('#playerStop').onclick = () => player.stop();
@@ -895,7 +937,7 @@ async function renderSettings() {
       <div class="progress"><div id="dlBar" style="width:${Math.round((n.hl + n.cl) / (2 * TOTAL_CHAPTERS) * 100)}%"></div></div>
       <div id="dlMsg" class="muted" style="font-size:14px;margin-top:6px"></div>
     </div>
-    <footer class="about">經文：1933 年巴克禮台語譯本，資料來自<a href="https://bible.fhl.net/" target="_blank" rel="noopener">信望愛資訊中心</a><br>真人朗讀：何女士（信望愛資訊中心，FDL 授權）　AI 台語語音：<a href="https://ithuan.tw/" target="_blank" rel="noopener">意傳科技</a></footer>`;
+    <footer class="about">經文：1933 年巴克禮台語譯本，資料來自<a href="https://bible.fhl.net/" target="_blank" rel="noopener">信望愛資訊中心</a><br>真人朗讀：何女士（信望愛資訊中心，FDL 授權）　AI 台語語音：<a href="https://ithuan.tw/" target="_blank" rel="noopener">意傳科技</a><br>版本 ${APP_VER}</footer>`;
   const setFs = d => { settings.fs = Math.min(32, Math.max(14, settings.fs + d)); saveSettings(); $('#fsVal').textContent = settings.fs; };
   $('#fsDown').onclick = () => setFs(-1);
   $('#fsUp').onclick = () => setFs(+1);
